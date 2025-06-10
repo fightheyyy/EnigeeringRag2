@@ -285,6 +285,120 @@ class BigModelKnowledgeBase:
         except Exception as e:
             print(f"❌ 清空集合失败: {e}")
     
+    def remove_documents_by_source(self, source_file: str) -> int:
+        """
+        根据来源文件删除文档
+        
+        Args:
+            source_file: 来源文件名
+            
+        Returns:
+            删除的文档数量
+        """
+        try:
+            # 先查询要删除的文档
+            results = self.collection.get(
+                where={"source_file": source_file}
+            )
+            
+            if not results['ids']:
+                print(f"⚠️ 未找到来源为 '{source_file}' 的文档")
+                return 0
+            
+            # 删除文档
+            self.collection.delete(
+                where={"source_file": source_file}
+            )
+            
+            removed_count = len(results['ids'])
+            print(f"🗑️ 成功删除 {removed_count} 个文档块（来源: {source_file}）")
+            return removed_count
+            
+        except Exception as e:
+            print(f"❌ 删除文档失败: {e}")
+            raise
+    
+    def remove_documents_by_ids(self, doc_ids: List[str]) -> int:
+        """
+        根据文档ID删除文档
+        
+        Args:
+            doc_ids: 文档ID列表
+            
+        Returns:
+            删除的文档数量
+        """
+        try:
+            if not doc_ids:
+                return 0
+            
+            self.collection.delete(ids=doc_ids)
+            
+            print(f"🗑️ 成功删除 {len(doc_ids)} 个文档块")
+            return len(doc_ids)
+            
+        except Exception as e:
+            print(f"❌ 删除文档失败: {e}")
+            raise
+    
+    def update_document(self, content: str, metadata: Dict[str, Any] = None, doc_id: str = None) -> str:
+        """
+        更新文档（先删除再添加）
+        
+        Args:
+            content: 新的文档内容
+            metadata: 新的元数据
+            doc_id: 要更新的文档ID，如果为None则根据content生成
+            
+        Returns:
+            更新后的文档ID
+        """
+        if doc_id is None:
+            doc_id = f"doc_{hash(content) % 1000000}"
+        
+        try:
+            # 先删除现有文档
+            self.collection.delete(ids=[doc_id])
+            print(f"🔄 删除旧文档: {doc_id}")
+        except Exception:
+            # 如果文档不存在，继续添加新文档
+            pass
+        
+        # 添加新文档
+        return self.add_document(content, metadata)
+    
+    def get_documents_by_source(self, source_file: str) -> List[Dict[str, Any]]:
+        """
+        获取指定来源的所有文档
+        
+        Args:
+            source_file: 来源文件名
+            
+        Returns:
+            文档列表
+        """
+        try:
+            results = self.collection.get(
+                where={"source_file": source_file},
+                include=['documents', 'metadatas', 'ids']
+            )
+            
+            documents = []
+            if results['ids']:
+                for i, doc_id in enumerate(results['ids']):
+                    documents.append({
+                        "id": doc_id,
+                        "content": results['documents'][i],
+                        "metadata": results['metadatas'][i]
+                    })
+            
+            print(f"📋 找到 {len(documents)} 个文档（来源: {source_file}）")
+            return documents
+            
+        except Exception as e:
+            print(f"❌ 获取文档失败: {e}")
+            return []
+    
     def split_document(self, content: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
         """
         分割文档为小块

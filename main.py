@@ -35,6 +35,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 挂载静态文件目录
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # 初始化服务
 config = Config()
 
@@ -42,7 +45,7 @@ config = Config()
 KNOWLEDGE_BASES = {
     "standards": "国家标准库",
     "engineering_knowledge_base": "原有工程知识库", 
-    "regulations": "法律法规库",  # 预留
+    "regulations": "法律法规库",
     "drawings": "项目图纸库"      # 预留
 }
 
@@ -159,448 +162,15 @@ async def startup_event():
     
     logger.info("系统启动完成")
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=FileResponse)
 async def get_homepage():
     """返回主页"""
-    return """
-    <!DOCTYPE html>
-    <html lang="zh-CN">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>工程监理智能问答系统</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; }
-            .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-            .header { text-align: center; margin-bottom: 40px; }
-            .header h1 { color: #2c3e50; font-size: 2.5em; margin-bottom: 10px; }
-            .header p { color: #7f8c8d; font-size: 1.2em; }
-            
-            .chat-container { 
-                background: white; 
-                border-radius: 12px; 
-                box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
-                overflow: hidden;
-                height: 600px;
-                display: flex;
-                flex-direction: column;
-            }
-            
-            .chat-header { 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                color: white; 
-                padding: 20px; 
-                text-align: center;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            
-            .kb-selector {
-                background: rgba(255,255,255,0.2);
-                border: 1px solid rgba(255,255,255,0.3);
-                border-radius: 6px;
-                color: white;
-                padding: 8px 12px;
-                font-size: 14px;
-                cursor: pointer;
-            }
-            
-            .kb-selector option {
-                background: #333;
-                color: white;
-            }
-            
-            .chat-messages { 
-                flex: 1; 
-                padding: 20px; 
-                overflow-y: auto; 
-                display: flex;
-                flex-direction: column;
-                gap: 15px;
-            }
-            
-            .message { 
-                max-width: 80%; 
-                padding: 15px; 
-                border-radius: 18px; 
-                word-wrap: break-word;
-                line-height: 1.4;
-            }
-            
-            .message.user { 
-                background: #007bff; 
-                color: white; 
-                align-self: flex-end; 
-                margin-left: auto;
-            }
-            
-            .message.assistant { 
-                background: #f8f9fa; 
-                color: #333; 
-                align-self: flex-start; 
-                border: 1px solid #e9ecef;
-            }
-            
-            .sources {
-                margin-top: 10px;
-                padding: 10px;
-                background: #e7f3ff;
-                border-radius: 8px;
-                font-size: 0.9em;
-            }
-            
-            .source-item {
-                margin: 5px 0;
-                color: #0066cc;
-            }
-            
-            .standards-section {
-                margin-top: 15px;
-                padding: 15px;
-                background: #f0f8ff;
-                border-radius: 8px;
-                border-left: 4px solid #007bff;
-            }
-            
-            .standard-item {
-                margin: 10px 0;
-                padding: 10px;
-                background: white;
-                border-radius: 6px;
-                border: 1px solid #e3f2fd;
-            }
-            
-            .standard-link {
-                color: #007bff;
-                text-decoration: none;
-                font-weight: 500;
-            }
-            
-            .standard-link:hover {
-                text-decoration: underline;
-            }
-            
-            .suggestions {
-                margin-top: 10px;
-                padding: 10px;
-                background: #fff3cd;
-                border-radius: 8px;
-                font-size: 0.9em;
-            }
-            
-            .chat-input { 
-                display: flex; 
-                padding: 20px; 
-                border-top: 1px solid #e9ecef;
-                gap: 10px;
-            }
-            
-            .chat-input input { 
-                flex: 1; 
-                padding: 12px 16px; 
-                border: 2px solid #e9ecef; 
-                border-radius: 25px; 
-                outline: none;
-                font-size: 16px;
-            }
-            
-            .chat-input input:focus { 
-                border-color: #007bff; 
-            }
-            
-            .chat-input button { 
-                padding: 12px 24px; 
-                background: #007bff; 
-                color: white; 
-                border: none; 
-                border-radius: 25px; 
-                cursor: pointer;
-                font-size: 16px;
-                transition: background 0.3s;
-            }
-            
-            .chat-input button:hover { 
-                background: #0056b3; 
-            }
-            
-            .chat-input button:disabled { 
-                background: #6c757d; 
-                cursor: not-allowed;
-            }
-            
-            .loading { 
-                display: none; 
-                color: #6c757d; 
-                font-style: italic;
-                align-self: flex-start;
-            }
-            
-            .examples {
-                margin-top: 30px;
-                background: white;
-                border-radius: 12px;
-                padding: 30px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            }
-            
-            .examples h3 {
-                color: #2c3e50;
-                margin-bottom: 20px;
-                text-align: center;
-            }
-            
-            .example-questions {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 15px;
-            }
-            
-            .example-question {
-                padding: 15px;
-                background: #f8f9fa;
-                border-radius: 8px;
-                cursor: pointer;
-                transition: all 0.3s;
-                border: 1px solid #e9ecef;
-            }
-            
-            .example-question:hover {
-                background: #e9ecef;
-                transform: translateY(-2px);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🏗️ 工程监理智能问答系统</h1>
-                <p>专业的规范查询与图纸解读助手</p>
-            </div>
-            
-            <div class="chat-container">
-                <div class="chat-header">
-                    <div>
-                        <h3>智能助手在线</h3>
-                        <p id="headerDescription">我可以帮您查询工程规范、标准和设计图纸信息</p>
-                    </div>
-                    <div>
-                        <select class="kb-selector" id="knowledgeBaseSelector" onchange="switchKnowledgeBase()">
-                            <option value="standards">📋 国家标准库</option>
-                            <option value="engineering_knowledge_base">📚 工程知识库</option>
-                            <option value="regulations">⚖️ 法律法规库</option>
-                            <option value="drawings">📐 项目图纸库</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="chat-messages" id="chatMessages">
-                    <div class="message assistant">
-                        您好！我是您的工程监理智能助手。我可以帮助您查询：<br>
-                        • 国家和地方工程建设规范标准<br>
-                        • 项目设计图纸技术要求<br>
-                        • 施工质量验收标准<br>
-                        • 安全技术规范<br><br>
-                        请直接提出您的问题，比如"混凝土保护层厚度要求"或"脚手架连墙件间距规定"。
-                    </div>
-                </div>
-                
-                <div class="loading" id="loading">正在查询相关规范和图纸...</div>
-                
-                <div class="chat-input">
-                    <input type="text" id="messageInput" placeholder="请输入您的问题..." />
-                    <button onclick="sendMessage()" id="sendButton">发送</button>
-                </div>
-            </div>
-            
-            <div class="examples">
-                <h3>💡 常见问题示例</h3>
-                <div class="example-questions">
-                    <div class="example-question" onclick="askExample('混凝土结构保护层最小厚度是多少？')">
-                        混凝土结构保护层最小厚度是多少？
-                    </div>
-                    <div class="example-question" onclick="askExample('脚手架连墙件最大间距要求？')">
-                        脚手架连墙件最大间距要求？
-                    </div>
-                    <div class="example-question" onclick="askExample('钢筋锚固长度如何计算？')">
-                        钢筋锚固长度如何计算？
-                    </div>
-                    <div class="example-question" onclick="askExample('外墙保温材料有什么要求？')">
-                        外墙保温材料有什么要求？
-                    </div>
-                </div>
-            </div>
-        </div>
+    return FileResponse("static/index.html")
 
-        <script>
-            let sessionId = 'session_' + Date.now();
-            
-            function addMessage(content, isUser, sources = null, suggestions = null) {
-                const messagesContainer = document.getElementById('chatMessages');
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
-                
-                let html = content;
-                
-                if (sources && sources.length > 0) {
-                    html += '<div class="sources"><strong>📚 参考来源：</strong>';
-                    sources.forEach((source, index) => {
-                        html += `<div class="source-item">
-                            ${index + 1}. ${source.file_name}
-                            ${source.regulation_code ? ' (' + source.regulation_code + ')' : ''}
-                            ${source.section ? ' - ' + source.section : ''}
-                            (相关度: ${(source.similarity_score * 100).toFixed(1)}%)
-                        </div>`;
-                    });
-                    html += '</div>';
-                }
-                
-                if (suggestions && suggestions.length > 0) {
-                    html += '<div class="suggestions"><strong>💭 相关建议：</strong><br>';
-                    suggestions.forEach(suggestion => {
-                        html += `• ${suggestion}<br>`;
-                    });
-                    html += '</div>';
-                }
-                
-                messageDiv.innerHTML = html;
-                messagesContainer.appendChild(messageDiv);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-            
-            async function sendMessage() {
-                const input = document.getElementById('messageInput');
-                const sendButton = document.getElementById('sendButton');
-                const loading = document.getElementById('loading');
-                
-                const question = input.value.trim();
-                if (!question) return;
-                
-                // 显示用户消息
-                addMessage(question, true);
-                input.value = '';
-                
-                // 禁用输入
-                sendButton.disabled = true;
-                loading.style.display = 'block';
-                
-                try {
-                    const response = await fetch('/ask', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            question: question,
-                            session_id: sessionId
-                        })
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        addMessage(result.answer, false, result.sources, result.suggestions);
-                    } else {
-                        addMessage('抱歉，处理您的问题时出现错误：' + result.detail, false);
-                    }
-                } catch (error) {
-                    addMessage('网络错误，请稍后重试', false);
-                    console.error('Error:', error);
-                } finally {
-                    sendButton.disabled = false;
-                    loading.style.display = 'none';
-                }
-            }
-            
-            function askExample(question) {
-                document.getElementById('messageInput').value = question;
-                sendMessage();
-            }
-            
-            // 切换知识库
-            async function switchKnowledgeBase() {
-                const selector = document.getElementById('knowledgeBaseSelector');
-                const selectedKB = selector.value;
-                const headerDescription = document.getElementById('headerDescription');
-                
-                try {
-                    const response = await fetch('/switch-knowledge-base', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({"collection_name": selectedKB})
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        // 更新界面描述
-                        const kbDescriptions = {
-                            'standards': '专业的国家标准查询服务 📋',
-                            'engineering_knowledge_base': '工程技术知识查询服务 📚',
-                            'regulations': '法律法规查询服务 ⚖️',
-                            'drawings': '项目图纸查询服务 📐'
-                        };
-                        
-                        headerDescription.textContent = kbDescriptions[selectedKB] || '智能问答服务';
-                        
-                        // 显示切换成功消息
-                        addMessage(`✅ 已切换到 ${result.message}\\n📊 包含 ${result.document_count} 个文档`, false);
-                        
-                        // 重置session
-                        sessionId = 'session_' + Date.now();
-                    } else {
-                        addMessage(`❌ 切换失败：${result.detail}`, false);
-                    }
-                } catch (error) {
-                    addMessage('切换知识库时发生网络错误', false);
-                    console.error('Switch KB Error:', error);
-                }
-            }
-            
-            // 页面加载时获取当前知识库状态
-            async function loadKnowledgeBases() {
-                try {
-                    const response = await fetch('/knowledge-bases');
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        const selector = document.getElementById('knowledgeBaseSelector');
-                        selector.value = result.current_collection;
-                        
-                        // 更新选择器选项状态
-                        Array.from(selector.options).forEach(option => {
-                            const kbInfo = result.knowledge_bases[option.value];
-                            if (kbInfo && kbInfo.status === 'not_available') {
-                                option.disabled = true;
-                                option.textContent += ' (不可用)';
-                            } else if (kbInfo) {
-                                option.textContent += ` (${kbInfo.document_count} 文档)`;
-                            }
-                        });
-                    }
-                } catch (error) {
-                    console.error('Load KB Error:', error);
-                }
-            }
-            
-            // 回车发送
-            document.getElementById('messageInput').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-            
-            // 页面加载完成后初始化
-            document.addEventListener('DOMContentLoaded', function() {
-                loadKnowledgeBases();
-            });
-        </script>
-    </body>
-    </html>
-    """
+@app.get("/admin", response_class=FileResponse)
+async def get_admin_page():
+    """返回管理页面"""
+    return FileResponse("static/admin.html")
 
 @app.post("/ask", response_model=AnswerResponse)
 async def ask_question(request: QuestionRequest):
@@ -734,6 +304,38 @@ async def ask_question(request: QuestionRequest):
             context_history=history
         )
         
+        # 检查答案是否真正回答了问题（内容相关性检查）
+        irrelevant_keywords = [
+            "未检索到", "未找到", "没有找到", "无法找到", "不能找到",
+            "建议补充提供", "建议查阅", "需要查阅",
+            "根据提供的规范文档内容，未",
+            "[使用标准: 无]"
+        ]
+        
+        # 检查复合条件
+        compound_conditions = [
+            ("文档中主要涉及" in response.answer and "但未包含" in response.answer),
+            ("文档中主要涉及" in response.answer and "但未明确提及" in response.answer),
+            ("文档中主要涉及" in response.answer and "未包含" in response.answer),
+            ("根据提供的" in response.answer and "未检索到" in response.answer)
+        ]
+        
+        # 检查是否是不相关的回答
+        is_irrelevant = (any(keyword in response.answer for keyword in irrelevant_keywords) or 
+                        any(compound_conditions))
+        
+        if is_irrelevant:
+            logger.warning("检索到的文档内容与问题不够相关，回退到模型知识回答")
+            response = llm_service.generate_answer_without_context(request.question)
+            
+            # 为回退答案添加会话历史
+            history.append({"role": "user", "content": request.question})
+            history.append({"role": "assistant", "content": response.answer})
+            session_history[session_id] = history[-10:]
+            response.session_id = session_id
+            
+            return response
+        
         # 提取答案中实际使用的标准并过滤相关标准列表
         filtered_standards = []
         if related_standards:
@@ -820,6 +422,158 @@ async def upload_document(
             
     except Exception as e:
         logger.error(f"文档上传失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload-batch")
+async def upload_documents_batch(
+    files: List[UploadFile] = File(...),
+    chunk_size: int = Form(800),
+    chunk_overlap: int = Form(100)
+):
+    """批量上传文档到知识库（增量添加）"""
+    try:
+        if len(files) > 20:  # 限制单次上传文件数量
+            raise HTTPException(status_code=400, detail="单次最多上传20个文件")
+        
+        results = []
+        total_chunks = 0
+        
+        for file in files:
+            # 检查文件类型
+            if not any(file.filename.endswith(ext) for ext in config.SUPPORTED_FILE_TYPES):
+                results.append({
+                    "filename": file.filename,
+                    "status": "failed",
+                    "error": f"不支持的文件类型"
+                })
+                continue
+            
+            try:
+                # 读取文件内容
+                content = await file.read()
+                content_str = content.decode('utf-8', errors='ignore')
+                
+                # 分割文档
+                chunks = kb_manager.split_document(content_str, chunk_size, chunk_overlap)
+                
+                # 准备元数据
+                metadatas = []
+                for i, chunk in enumerate(chunks):
+                    metadata = {
+                        "source_file": file.filename,
+                        "chunk_index": i,
+                        "chunk_count": len(chunks),
+                        "document_type": "uploaded",
+                        "upload_time": datetime.now().isoformat()
+                    }
+                    metadatas.append(metadata)
+                
+                # 批量添加到知识库
+                doc_ids = kb_manager.add_documents_batch(chunks, metadatas)
+                
+                results.append({
+                    "filename": file.filename,
+                    "status": "success",
+                    "chunks_added": len(doc_ids),
+                    "document_ids": doc_ids[:5]  # 只返回前5个ID
+                })
+                
+                total_chunks += len(chunks)
+                
+            except Exception as e:
+                results.append({
+                    "filename": file.filename,
+                    "status": "failed",
+                    "error": str(e)
+                })
+        
+        # 获取更新后的知识库统计
+        kb_stats = kb_manager.get_knowledge_base_stats()
+        
+        return {
+            "message": f"批量上传完成，共添加 {total_chunks} 个文档块",
+            "total_chunks_added": total_chunks,
+            "files_processed": len(files),
+            "results": results,
+            "knowledge_base_stats": kb_stats
+        }
+        
+    except Exception as e:
+        logger.error(f"批量文档上传失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/add-text")
+async def add_text_to_knowledge_base(
+    request: dict
+):
+    """直接添加文本到知识库（增量添加）"""
+    try:
+        text_content = request.get("content", "").strip()
+        title = request.get("title", "手动添加的文本")
+        document_type = request.get("document_type", "manual")
+        chunk_size = request.get("chunk_size", 800)
+        chunk_overlap = request.get("chunk_overlap", 100)
+        
+        if not text_content:
+            raise HTTPException(status_code=400, detail="文本内容不能为空")
+        
+        if len(text_content) > 50000:  # 限制单次添加的文本长度
+            raise HTTPException(status_code=400, detail="单次添加的文本长度不能超过50000字符")
+        
+        # 分割文档
+        chunks = kb_manager.split_document(text_content, chunk_size, chunk_overlap)
+        
+        # 准备元数据
+        metadatas = []
+        for i, chunk in enumerate(chunks):
+            metadata = {
+                "source_file": title,
+                "chunk_index": i,
+                "chunk_count": len(chunks),
+                "document_type": document_type,
+                "add_time": datetime.now().isoformat(),
+                "content_length": len(chunk)
+            }
+            metadatas.append(metadata)
+        
+        # 批量添加到知识库
+        doc_ids = kb_manager.add_documents_batch(chunks, metadatas)
+        
+        # 获取更新后的知识库统计
+        kb_stats = kb_manager.get_knowledge_base_stats()
+        
+        return {
+            "message": f"成功添加文本，共分割为 {len(chunks)} 个文档块",
+            "title": title,
+            "chunks_added": len(chunks),
+            "document_ids": doc_ids,
+            "knowledge_base_stats": kb_stats
+        }
+        
+    except Exception as e:
+        logger.error(f"添加文本到知识库失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/remove-documents")
+async def remove_documents_by_source(
+    source_file: str
+):
+    """根据来源文件删除文档（用于更新文档）"""
+    try:
+        # 这个功能需要在BigModelKnowledgeBase中实现
+        # 目前ChromaDB支持根据metadata过滤删除
+        removed_count = kb_manager.remove_documents_by_source(source_file)
+        
+        kb_stats = kb_manager.get_knowledge_base_stats()
+        
+        return {
+            "message": f"成功删除来源为 '{source_file}' 的文档",
+            "removed_count": removed_count,
+            "knowledge_base_stats": kb_stats
+        }
+        
+    except Exception as e:
+        logger.error(f"删除文档失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/status", response_model=SystemStatus)

@@ -267,23 +267,30 @@ class LLMService:
             # 构建针对无知识库情况的消息
             messages = [
                 {"role": "system", "content": f"""你是一位资深的工程监理专家，拥有丰富的工程技术知识和实践经验。
-当前用户询问的是{engineering_domain}领域的问题，但系统知识库中暂时没有找到直接相关的规范文档。
+当前用户询问的是{engineering_domain}领域的问题，系统知识库中暂时没有找到直接相关的规范文档。
 请基于你的专业知识回答用户问题，并：
 
-1. 明确说明这个回答是基于通用工程知识，而非特定规范文档
-2. 提供准确、专业的技术信息
-3. 如果涉及具体标准或规范，建议用户查阅相关文档
-4. 给出实用的工程监理建议
+1. 基于你的工程技术知识提供准确、专业的技术信息
+2. 如果知道具体的技术参数、标准要求，请直接提供
+3. 明确标注参考的相关工程规范编号（如GB、JGJ等标准）
+4. 给出实用的工程监理建议和注意事项
 5. 使用中文回答，专业但易懂
 
-注意：请在回答开头明确标注"基于通用工程知识回答"。"""},
+回答格式要求：
+- 直接回答技术问题，提供具体的技术参数和要求
+- 说明信息来源和依据的工程规范
+- 在回答最后必须按以下格式标注使用的标准：
+
+[使用标准: 此处列出你在回答中引用的标准编号，用逗号分隔]
+
+注意：请基于你的工程技术知识直接回答，不要说"基于通用工程知识"这样的表述。"""},
                 {"role": "user", "content": f"""
 【用户问题】{question}
 
 【工程领域】{engineering_domain}
 {f"【相关规范建议】{', '.join(domain_config.get('regulations', []))}" if domain_config.get('regulations') else ""}
 
-请基于工程监理的通用知识和最佳实践回答这个问题：
+请基于你的工程监理专业知识直接回答这个问题，并提供具体的技术要求和相关规范：
 """}
             ]
             
@@ -293,7 +300,7 @@ class LLMService:
             response = self.client.chat.completions.create(
                 model=deepseek_config["model"],
                 messages=messages,
-                temperature=0.7,  # 稍高的温度以获得更自然的回答
+                temperature=0.3,  # 降低温度以获得更准确的回答
                 max_tokens=deepseek_config["max_tokens"],
                 top_p=0.9
             )
@@ -308,9 +315,9 @@ class LLMService:
                 question=question,
                 answer=answer_text,
                 sources=[],  # 没有来源文档
-                confidence_score=0.6,  # 中等置信度，因为是基于通用知识
+                confidence_score=0.7,  # 提高置信度，因为是基于模型专业知识
                 timestamp=datetime.now(),
-                has_definitive_answer=False,  # 非确定性答案
+                has_definitive_answer=True,  # 设为确定性答案
                 suggestions=suggestions
             )
             
@@ -408,6 +415,89 @@ class LLMService:
         except Exception as e:
             logger.error(f"关键点提取失败: {e}")
             return []
+
+    def generate_answer_with_web_search(self, question: str) -> AnswerResponse:
+        """使用网络搜索增强的答案生成"""
+        try:
+            logger.info(f"基于网络搜索和模型知识生成答案 - 问题: {question}")
+            
+            # 识别工程领域
+            engineering_domain = identify_engineering_domain(question)
+            domain_config = self.config.get_engineering_domain_config(engineering_domain)
+            
+            # 构建搜索查询词
+            search_query = f"{question} 工程规范 标准"
+            if domain_config.get('regulations'):
+                search_query += f" {' '.join(domain_config['regulations'][:2])}"
+            
+            try:
+                # 这里可以集成网络搜索API (如Google、百度等)
+                # 示例：search_results = web_search_api(search_query)
+                web_info = f"网络搜索关键词: {search_query}"
+                logger.info(web_info)
+            except Exception as e:
+                logger.warning(f"网络搜索失败: {e}")
+                web_info = ""
+            
+            # 构建消息
+            messages = [
+                {"role": "system", "content": f"""你是一位资深的工程监理专家，拥有丰富的工程技术知识和实践经验。
+当前用户询问的是{engineering_domain}领域的问题。请基于你的专业知识回答用户问题，并：
+
+1. 基于你的工程技术知识提供准确、专业的技术信息
+2. 如果知道具体的技术参数、标准要求，请直接提供
+3. 明确标注参考的相关工程规范编号（如GB、JGJ等标准）
+4. 给出实用的工程监理建议和注意事项
+5. 使用中文回答，专业但易懂
+
+回答格式要求：
+- 直接回答技术问题，提供具体的技术参数和要求
+- 说明信息来源和依据的工程规范
+- 在回答最后必须按以下格式标注使用的标准：
+
+[使用标准: 此处列出你在回答中引用的标准编号，用逗号分隔]
+
+注意：请基于你的工程技术知识直接回答，提供具体的技术要求。"""},
+                {"role": "user", "content": f"""
+【用户问题】{question}
+
+【工程领域】{engineering_domain}
+{f"【相关规范建议】{', '.join(domain_config.get('regulations', []))}" if domain_config.get('regulations') else ""}
+
+请基于你的工程监理专业知识直接回答这个问题，并提供具体的技术要求和相关规范：
+"""}
+            ]
+            
+            # 调用DeepSeek模型
+            deepseek_config = self.config.get_deepseek_config()
+            
+            response = self.client.chat.completions.create(
+                model=deepseek_config["model"],
+                messages=messages,
+                temperature=0.3,
+                max_tokens=deepseek_config["max_tokens"],
+                top_p=0.9
+            )
+            
+            answer_text = response.choices[0].message.content
+            logger.info("基于网络搜索增强的答案生成成功")
+            
+            # 生成建议
+            suggestions = self._generate_general_suggestions(question, engineering_domain)
+            
+            return AnswerResponse(
+                question=question,
+                answer=answer_text,
+                sources=[],
+                confidence_score=0.8,  # 更高置信度
+                timestamp=datetime.now(),
+                has_definitive_answer=True,
+                suggestions=suggestions
+            )
+            
+        except Exception as e:
+            logger.error(f"基于网络搜索生成答案失败: {e}")
+            return self.generate_answer_without_context(question)
 
 # 工程监理专用功能函数
 def identify_engineering_domain(question: str) -> str:

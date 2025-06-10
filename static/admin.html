@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>向量数据库管理 - 工程监理智能问答系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        .admin-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .admin-header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+
+        .admin-header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .admin-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .admin-card h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: var(--transition);
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .file-upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--light-bg);
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--primary-color);
+            background: rgba(0,123,255,0.05);
+        }
+
+        .file-upload-area.dragover {
+            border-color: var(--primary-color);
+            background: rgba(0,123,255,0.1);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: var(--text-light);
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: var(--light-bg);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-card h3 {
+            margin: 0 0 5px 0;
+            font-size: 2rem;
+            color: var(--primary-color);
+        }
+
+        .stat-card p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .file-size {
+            font-size: 12px;
+            color: var(--text-light);
+        }
+
+        .file-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-processing {
+            background: #cce5ff;
+            color: #0066cc;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .settings-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>🗂️ 向量数据库管理</h1>
+            <p>增量添加、更新和管理知识库中的向量数据</p>
+        </div>
+
+        <!-- 知识库统计 -->
+        <div class="admin-card">
+            <h2>📊 知识库统计信息</h2>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <h3 id="totalDocuments">-</h3>
+                    <p>总文档数</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="currentCollection">-</h3>
+                    <p>当前集合</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="embeddingModel">-</h3>
+                    <p>向量模型</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="embeddingDimension">-</h3>
+                    <p>向量维度</p>
+                </div>
+            </div>
+            
+            <!-- 知识库切换 -->
+            <div style="margin: 20px 0;">
+                <label for="knowledgeBaseSelect" style="display: block; margin-bottom: 8px; font-weight: 500;">切换知识库：</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <select id="knowledgeBaseSelect" style="flex: 1; padding: 8px; border: 2px solid var(--border-color); border-radius: 6px;">
+                        <option value="">加载中...</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="switchKnowledgeBase()">切换</button>
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" onclick="refreshStats()">🔄 刷新统计</button>
+        </div>
+
+        <div class="admin-grid">
+            <!-- 文本添加 -->
+            <div class="admin-card">
+                <h2>📝 添加文本</h2>
+                <form id="textForm">
+                    <div class="form-group">
+                        <label for="textTitle">标题</label>
+                        <input type="text" id="textTitle" placeholder="输入文档标题">
+                    </div>
+                    <div class="form-group">
+                        <label for="textContent">内容</label>
+                        <textarea id="textContent" placeholder="输入文档内容（最多50000字符）"></textarea>
+                    </div>
+                    <div class="settings-row">
+                        <div class="form-group">
+                            <label for="textChunkSize">块大小</label>
+                            <input type="number" id="textChunkSize" value="800" min="100" max="2000">
+                        </div>
+                        <div class="form-group">
+                            <label for="textChunkOverlap">重叠大小</label>
+                            <input type="number" id="textChunkOverlap" value="100" min="0" max="500">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">
+                        📤 添加到知识库
+                    </button>
+                </form>
+                <div id="textStatus"></div>
+            </div>
+
+            <!-- 文件批量上传 -->
+            <div class="admin-card">
+                <h2>📁 批量上传文件</h2>
+                <div class="file-upload-area" id="fileUploadArea">
+                    <div class="upload-icon">📎</div>
+                    <p>点击选择文件或拖拽文件到此处</p>
+                    <p style="font-size: 12px; color: var(--text-light);">
+                        支持 .txt, .md, .pdf, .docx 格式，单次最多20个文件
+                    </p>
+                </div>
+                <input type="file" id="fileInput" multiple accept=".txt,.md,.pdf,.docx" class="hidden">
+                
+                <div class="settings-row" style="margin: 15px 0;">
+                    <div class="form-group">
+                        <label for="fileChunkSize">块大小</label>
+                        <input type="number" id="fileChunkSize" value="800" min="100" max="2000">
+                    </div>
+                    <div class="form-group">
+                        <label for="fileChunkOverlap">重叠大小</label>
+                        <input type="number" id="fileChunkOverlap" value="100" min="0" max="500">
+                    </div>
+                </div>
+
+                <div id="fileList" class="file-list hidden"></div>
+                
+                <div class="progress-bar hidden" id="uploadProgress">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                
+                <button class="btn btn-primary btn-full hidden" id="uploadBtn">
+                    🚀 开始上传
+                </button>
+                
+                <div id="uploadStatus"></div>
+            </div>
+        </div>
+
+        <!-- 文档管理 -->
+        <div class="admin-card">
+            <h2>🗑️ 文档管理</h2>
+            <div class="admin-grid">
+                <div>
+                    <h3>删除指定来源的文档</h3>
+                    <div class="form-group">
+                        <label for="sourceFile">来源文件名</label>
+                        <input type="text" id="sourceFile" placeholder="输入要删除的文件名">
+                    </div>
+                    <button class="btn btn-danger" onclick="removeDocuments()">
+                        🗑️ 删除文档
+                    </button>
+                </div>
+                <div>
+                    <h3>搜索测试</h3>
+                    <div class="form-group">
+                        <label for="testQuery">测试查询</label>
+                        <input type="text" id="testQuery" placeholder="输入测试查询">
+                    </div>
+                    <button class="btn btn-secondary" onclick="testSearch()">
+                        🔍 搜索测试
+                    </button>
+                </div>
+            </div>
+            <div id="managementStatus"></div>
+        </div>
+
+        <!-- 返回主页 -->
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="/" class="btn btn-secondary">
+                🏠 返回主页
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeAdmin();
+            setupEventListeners();
+        });
+
+        function initializeAdmin() {
+            refreshStats();
+            loadKnowledgeBases();
+        }
+
+        function setupEventListeners() {
+            // 文本表单提交
+            document.getElementById('textForm').addEventListener('submit', handleTextSubmit);
+            
+            // 文件上传区域
+            const uploadArea = document.getElementById('fileUploadArea');
+            const fileInput = document.getElementById('fileInput');
+            
+            uploadArea.addEventListener('click', () => fileInput.click());
+            uploadArea.addEventListener('dragover', handleDragOver);
+            uploadArea.addEventListener('drop', handleDrop);
+            
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // 上传按钮
+            document.getElementById('uploadBtn').addEventListener('click', handleFileUpload);
+        }
+
+        async function refreshStats() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const stats = data.knowledge_base_stats;
+                    document.getElementById('totalDocuments').textContent = stats.total_chunks || 0;
+                    document.getElementById('currentCollection').textContent = stats.collection_name || '-';
+                    document.getElementById('embeddingModel').textContent = stats.embedding_model || '-';
+                    document.getElementById('embeddingDimension').textContent = stats.embedding_dimension || '-';
+                } else {
+                    showStatus('managementStatus', '获取统计信息失败', 'error');
+                }
+            } catch (error) {
+                showStatus('managementStatus', '网络错误：' + error.message, 'error');
+            }
+        }
+
+        async function loadKnowledgeBases() {
+            try {
+                const response = await fetch('/knowledge-bases');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const select = document.getElementById('knowledgeBaseSelect');
+                    select.innerHTML = '';
+                    
+                    for (const [kbId, kbInfo] of Object.entries(data.knowledge_bases)) {
+                        const option = document.createElement('option');
+                        option.value = kbId;
+                        option.textContent = `${kbInfo.name} (${kbInfo.document_count}个文档)`;
+                        
+                        if (kbInfo.is_current) {
+                            option.selected = true;
+                        }
+                        
+                        if (kbInfo.status !== 'available') {
+                            option.disabled = true;
+                            option.textContent += ' [不可用]';
+                        }
+                        
+                        select.appendChild(option);
+                    }
+                } else {
+                    console.error('获取知识库列表失败:', data.detail);
+                }
+            } catch (error) {
+                console.error('网络错误:', error);
+            }
+        }
+
+        async function switchKnowledgeBase() {
+            const select = document.getElementById('knowledgeBaseSelect');
+            const selectedKb = select.value;
+            
+            if (!selectedKb) {
+                showStatus('managementStatus', '请选择要切换的知识库', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('managementStatus', '正在切换知识库...', 'warning');
+                
+                const response = await fetch('/switch-knowledge-base', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ collection_name: selectedKb })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('managementStatus', 
+                        `✅ ${data.message} (${data.document_count}个文档)`, 
+                        'success'
+                    );
+                    refreshStats();
+                    loadKnowledgeBases();
+                } else {
+                    showStatus('managementStatus', '切换失败：' + data.detail, 'error');
+                }
+            } catch (error) {
+                showStatus('managementStatus', '网络错误：' + error.message, 'error');
+            }
+        }
+
+        async function handleTextSubmit(e) {
+            e.preventDefault();
+            
+            const title = document.getElementById('textTitle').value.trim();
+            const content = document.getElementById('textContent').value.trim();
+            const chunkSize = parseInt(document.getElementById('textChunkSize').value);
+            const chunkOverlap = parseInt(document.getElementById('textChunkOverlap').value);
+            
+            if (!content) {
+                showStatus('textStatus', '请输入文本内容', 'error');
+                return;
+            }
+            
+            if (content.length > 50000) {
+                showStatus('textStatus', '文本内容过长，请限制在50000字符以内', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('textStatus', '正在添加文本到知识库...', 'warning');
+                
+                const response = await fetch('/add-text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title || '手动添加的文本',
+                        content: content,
+                        chunk_size: chunkSize,
+                        chunk_overlap: chunkOverlap
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('textStatus', 
+                        `✅ 成功添加文本！分割为 ${data.chunks_added} 个文档块`, 
+                        'success'
+                    );
+                    document.getElementById('textForm').reset();
+                    refreshStats();
+                } else {
+                    showStatus('textStatus', '添加失败：' + data.detail, 'error');
+                }
+            } catch (error) {
+                showStatus('textStatus', '网络错误：' + error.message, 'error');
+            }
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            
+            const files = Array.from(e.dataTransfer.files);
+            processFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            processFiles(files);
+        }
+
+        function processFiles(files) {
+            if (files.length > 20) {
+                showStatus('uploadStatus', '单次最多上传20个文件', 'error');
+                return;
+            }
+            
+            const validFiles = files.filter(file => {
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                return ['.txt', '.md', '.pdf', '.docx'].includes(ext);
+            });
+            
+            if (validFiles.length !== files.length) {
+                showStatus('uploadStatus', '部分文件格式不支持，已过滤', 'warning');
+            }
+            
+            if (validFiles.length === 0) {
+                showStatus('uploadStatus', '没有有效的文件', 'error');
+                return;
+            }
+            
+            displayFileList(validFiles);
+            document.getElementById('uploadBtn').classList.remove('hidden');
+        }
+
+        function displayFileList(files) {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                    <div class="file-status status-pending" id="status-${index}">待上传</div>
+                `;
+                fileList.appendChild(fileItem);
+            });
+            
+            fileList.classList.remove('hidden');
+            window.selectedFiles = files;
+        }
+
+        async function handleFileUpload() {
+            if (!window.selectedFiles || window.selectedFiles.length === 0) {
+                showStatus('uploadStatus', '请先选择文件', 'error');
+                return;
+            }
+            
+            const chunkSize = parseInt(document.getElementById('fileChunkSize').value);
+            const chunkOverlap = parseInt(document.getElementById('fileChunkOverlap').value);
+            
+            const formData = new FormData();
+            window.selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+            formData.append('chunk_size', chunkSize);
+            formData.append('chunk_overlap', chunkOverlap);
+            
+            // 显示进度条
+            const progressBar = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            progressBar.classList.remove('hidden');
+            
+            // 禁用上传按钮
+            const uploadBtn = document.getElementById('uploadBtn');
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '🔄 上传中...';
+            
+            try {
+                showStatus('uploadStatus', '正在上传文件...', 'warning');
+                
+                // 更新文件状态为处理中
+                window.selectedFiles.forEach((file, index) => {
+                    const statusEl = document.getElementById(`status-${index}`);
+                    statusEl.textContent = '处理中';
+                    statusEl.className = 'file-status status-processing';
+                });
+                
+                const response = await fetch('/upload-batch', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                // 更新进度条
+                progressFill.style.width = '100%';
+                
+                if (response.ok) {
+                    // 更新文件状态
+                    data.results.forEach((result, index) => {
+                        const statusEl = document.getElementById(`status-${index}`);
+                        if (result.status === 'success') {
+                            statusEl.textContent = `完成 (${result.chunks_added}块)`;
+                            statusEl.className = 'file-status status-completed';
+                        } else {
+                            statusEl.textContent = '失败';
+                            statusEl.className = 'file-status status-failed';
+                        }
+                    });
+                    
+                    showStatus('uploadStatus', 
+                        `✅ 批量上传完成！共添加 ${data.total_chunks_added} 个文档块`, 
+                        'success'
+                    );
+                    refreshStats();
+                } else {
+                    showStatus('uploadStatus', '上传失败：' + data.detail, 'error');
+                }
+            } catch (error) {
+                showStatus('uploadStatus', '网络错误：' + error.message, 'error');
+            } finally {
+                // 重置上传按钮
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '🚀 开始上传';
+                
+                // 隐藏进度条
+                setTimeout(() => {
+                    progressBar.classList.add('hidden');
+                    progressFill.style.width = '0%';
+                }, 2000);
+            }
+        }
+
+        async function removeDocuments() {
+            const sourceFile = document.getElementById('sourceFile').value.trim();
+            
+            if (!sourceFile) {
+                showStatus('managementStatus', '请输入要删除的文件名', 'error');
+                return;
+            }
+            
+            if (!confirm(`确定要删除来源为 "${sourceFile}" 的所有文档吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            try {
+                showStatus('managementStatus', '正在删除文档...', 'warning');
+                
+                const response = await fetch(`/remove-documents?source_file=${encodeURIComponent(sourceFile)}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('managementStatus', 
+                        `✅ 成功删除 ${data.removed_count} 个文档块`, 
+                        'success'
+                    );
+                    document.getElementById('sourceFile').value = '';
+                    refreshStats();
+                } else {
+                    showStatus('managementStatus', '删除失败：' + data.detail, 'error');
+                }
+            } catch (error) {
+                showStatus('managementStatus', '网络错误：' + error.message, 'error');
+            }
+        }
+
+        async function testSearch() {
+            const query = document.getElementById('testQuery').value.trim();
+            
+            if (!query) {
+                showStatus('managementStatus', '请输入测试查询', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('managementStatus', '正在搜索...', 'warning');
+                
+                const response = await fetch(`/search?query=${encodeURIComponent(query)}&top_k=3`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let resultText = `🔍 搜索结果（共 ${data.results.length} 个）：\n`;
+                    data.results.forEach((result, index) => {
+                        resultText += `\n${index + 1}. 相似度: ${(result.similarity_score * 100).toFixed(1)}%\n`;
+                        resultText += `来源: ${result.file_name}\n`;
+                        resultText += `内容: ${result.content.substring(0, 100)}...\n`;
+                    });
+                    
+                    showStatus('managementStatus', resultText, 'success');
+                } else {
+                    showStatus('managementStatus', '搜索失败：' + data.detail, 'error');
+                }
+            } catch (error) {
+                showStatus('managementStatus', '网络错误：' + error.message, 'error');
+            }
+        }
+
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status-message status-${type}">${message.replace(/\n/g, '<br>')}</div>`;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html> 

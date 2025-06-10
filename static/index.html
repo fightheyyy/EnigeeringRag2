@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程监理智能问答系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ 工程监理智能问答系统</h1>
+            <p>专业的规范查询与图纸解读助手</p>
+        </div>
+        
+        <div class="chat-container">
+            <div class="chat-header">
+                <div>
+                    <h3>智能助手在线</h3>
+                    <p id="headerDescription">我可以帮您查询工程规范、标准和设计图纸信息</p>
+                </div>
+                <div>
+                    <select class="kb-selector" id="knowledgeBaseSelector">
+                        <option value="standards">📋 国家标准库</option>
+                        <option value="engineering_knowledge_base">📚 工程知识库</option>
+                        <option value="regulations">⚖️ 法律法规库</option>
+                        <option value="drawings">📐 项目图纸库</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    您好！我是您的工程监理智能助手。我可以帮助您查询：<br>
+                    • 国家和地方工程建设规范标准<br>
+                    • 项目设计图纸技术要求<br>
+                    • 施工质量验收标准<br>
+                    • 安全技术规范<br><br>
+                    请直接提出您的问题，比如"混凝土保护层厚度要求"或"脚手架连墙件间距规定"。
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <span>正在查询相关规范和图纸...</span>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="请输入您的问题..." maxlength="500" />
+                <div class="input-actions">
+                    <span class="char-count" id="charCount">0/500</span>
+                    <button onclick="clearInput()" id="clearButton" title="清空输入">🗑️</button>
+                    <button onclick="sendMessage()" id="sendButton">
+                        <span class="send-text">发送</span>
+                        <span class="send-icon">📤</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="examples">
+            <h3>💡 常见问题示例</h3>
+            <div class="example-questions" id="exampleQuestions">
+                <!-- 动态加载示例问题 -->
+            </div>
+        </div>
+        
+        <!-- 返回顶部按钮 -->
+        <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+    </div>
+
+    <!-- 加载JavaScript -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/chat.js"></script>
+    <script src="/static/js/performance.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html> 
