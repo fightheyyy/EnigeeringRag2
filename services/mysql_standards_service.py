@@ -25,6 +25,13 @@ class StandardInfo:
     implement_date: Optional[str] = None
     document_id: Optional[str] = None
 
+@dataclass
+class RegulationInfo:
+    """法规信息数据类"""
+    id: int
+    legal_name: str
+    legal_url: str
+
 class MySQLStandardsService:
     """MySQL标准数据库服务"""
     
@@ -336,6 +343,111 @@ class MySQLStandardsService:
         except Exception as e:
             logger.error(f"❌ 获取数据库摘要失败: {e}")
             return {"error": str(e)}
+    
+    def search_regulations_by_name(self, query: str, limit: int = 10) -> List[RegulationInfo]:
+        """
+        根据法规名称搜索法规信息
+        
+        Args:
+            query: 搜索关键词
+            limit: 返回结果数量限制
+            
+        Returns:
+            法规信息列表
+        """
+        connection = None
+        try:
+            connection = self._get_connection()
+            with connection.cursor() as cursor:
+                # 使用LIKE进行模糊搜索
+                sql = """
+                SELECT id, legal_name, legal_url
+                FROM regulations 
+                WHERE legal_name LIKE %s
+                ORDER BY 
+                    CASE WHEN legal_name = %s THEN 1 
+                         ELSE 2 END,
+                    CHAR_LENGTH(legal_name)
+                LIMIT %s
+                """
+                
+                like_query = f"%{query}%"
+                cursor.execute(sql, (like_query, query, limit))
+                results = cursor.fetchall()
+                
+                regulations = []
+                for row in results:
+                    regulation = RegulationInfo(
+                        id=row['id'],
+                        legal_name=row['legal_name'],
+                        legal_url=row['legal_url']
+                    )
+                    regulations.append(regulation)
+                
+                logger.info(f"🔍 搜索法规 '{query}': 找到 {len(regulations)} 个结果")
+                return regulations
+                
+        except Exception as e:
+            logger.error(f"❌ 搜索法规失败: {e}")
+            return []
+        finally:
+            if connection:
+                connection.close()
+    
+    def find_regulation_by_content_keywords(self, content: str) -> List[RegulationInfo]:
+        """
+        根据内容关键词查找相关法规
+        
+        Args:
+            content: 内容文本
+            
+        Returns:
+            相关法规信息列表
+        """
+        # 提取关键词
+        keywords = []
+        if '住宅专项维修资金' in content:
+            keywords.append('住宅专项维修资金')
+        if '多层住宅' in content or '高层住宅' in content:
+            keywords.append('住宅专项维修资金')
+        if '售房款' in content:
+            keywords.append('住宅专项维修资金')
+        if '20%' in content or '30%' in content:
+            keywords.append('住宅专项维修资金')
+        
+        # 添加更多法规关键词匹配
+        keyword_mapping = {
+            '建筑工程': ['建筑工程施工', '建筑工程质量', '建筑业企业'],
+            '施工许可': ['建筑工程施工许可'],
+            '质量检测': ['建设工程质量检测'],
+            '安全生产': ['建筑施工企业安全生产', '安全生产管理'],
+            '房地产': ['房地产经纪', '房地产估价', '房地产开发'],
+            '城市规划': ['城市规划编制', '城乡规划编制'],
+            '商品房': ['商品房销售', '商品房预售', '商品房屋租赁'],
+        }
+        
+        for key, values in keyword_mapping.items():
+            if key in content:
+                keywords.extend(values)
+        
+        # 去重
+        keywords = list(set(keywords))
+        
+        # 搜索法规
+        all_regulations = []
+        for keyword in keywords[:3]:  # 限制关键词数量
+            regulations = self.search_regulations_by_name(keyword, 2)
+            all_regulations.extend(regulations)
+        
+        # 去重
+        seen_ids = set()
+        unique_regulations = []
+        for regulation in all_regulations:
+            if regulation.id not in seen_ids:
+                seen_ids.add(regulation.id)
+                unique_regulations.append(regulation)
+        
+        return unique_regulations[:3]  # 最多返回3个相关法规
 
 # 创建全局实例
 mysql_standards_service = None

@@ -2,7 +2,6 @@
 class ChatManager {
     constructor() {
         this.sessionId = Utils.generateId('session');
-        this.currentKnowledgeBase = 'standards';
         this.messageHistory = [];
         this.isLoading = false;
         
@@ -14,7 +13,6 @@ class ChatManager {
             clearButton: Utils.dom.get('#clearButton'),
             loading: Utils.dom.get('#loading'),
             charCount: Utils.dom.get('#charCount'),
-            knowledgeBaseSelector: Utils.dom.get('#knowledgeBaseSelector'),
             headerDescription: Utils.dom.get('#headerDescription')
         };
 
@@ -23,7 +21,6 @@ class ChatManager {
 
     init() {
         this.bindEvents();
-        this.loadKnowledgeBases();
         this.loadChatHistory();
         this.updateCharCount();
     }
@@ -46,11 +43,6 @@ class ChatManager {
         // 字符计数
         Utils.events.on(this.elements.messageInput, 'input', 
             Utils.debounce(() => this.updateCharCount(), 100)
-        );
-
-        // 知识库切换
-        Utils.events.on(this.elements.knowledgeBaseSelector, 'change', 
-            () => this.switchKnowledgeBase()
         );
 
         // 监听窗口关闭前保存历史记录
@@ -259,79 +251,10 @@ class ChatManager {
         });
     }
 
-    async switchKnowledgeBase() {
-        const selectedKB = this.elements.knowledgeBaseSelector.value;
-        if (selectedKB === this.currentKnowledgeBase) return;
-
-        this.setLoading(true);
-
-        try {
-            const response = await Utils.http.post('/switch-knowledge-base', {
-                collection_name: selectedKB
-            });
-
-            if (response.success) {
-                this.currentKnowledgeBase = selectedKB;
-                
-                // 更新界面描述
-                const kbDescriptions = {
-                    'standards': '专业的国家标准查询服务 📋',
-                    'engineering_knowledge_base': '工程技术知识查询服务 📚',
-                    'regulations': '法律法规查询服务 ⚖️',
-                    'drawings': '项目图纸查询服务 📐'
-                };
-
-                this.elements.headerDescription.textContent = 
-                    kbDescriptions[selectedKB] || '智能问答服务';
-
-                // 显示切换成功消息
-                this.addMessage(
-                    `✅ 已切换到 ${response.data.message}\n📊 包含 ${response.data.document_count} 个文档`,
-                    'assistant'
-                );
-
-                // 重置session
-                this.sessionId = Utils.generateId('session');
-            } else {
-                this.addMessage(`❌ 切换失败：${response.error}`, 'assistant');
-            }
-        } catch (error) {
-            console.error('Switch KB error:', error);
-            this.addMessage('切换知识库时发生网络错误', 'assistant');
-        } finally {
-            this.setLoading(false);
-        }
-    }
-
-    async loadKnowledgeBases() {
-        try {
-            const response = await Utils.http.get('/knowledge-bases');
-            
-            if (response.success) {
-                this.currentKnowledgeBase = response.data.current_collection;
-                this.elements.knowledgeBaseSelector.value = this.currentKnowledgeBase;
-
-                // 更新选择器选项状态
-                Array.from(this.elements.knowledgeBaseSelector.options).forEach(option => {
-                    const kbInfo = response.data.knowledge_bases[option.value];
-                    if (kbInfo && kbInfo.status === 'not_available') {
-                        option.disabled = true;
-                        option.textContent += ' (不可用)';
-                    } else if (kbInfo) {
-                        option.textContent += ` (${kbInfo.document_count} 文档)`;
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('Load KB error:', error);
-        }
-    }
-
     saveChatHistory() {
         if (this.messageHistory.length > 0) {
             Utils.storage.set(`chat_history_${this.sessionId}`, {
                 history: this.messageHistory,
-                knowledgeBase: this.currentKnowledgeBase,
                 timestamp: new Date()
             });
         }
@@ -354,12 +277,12 @@ class ChatManager {
     clearChat() {
         this.elements.chatMessages.innerHTML = `
             <div class="message assistant">
-                您好！我是您的工程监理智能助手。我可以帮助您查询：<br>
-                • 国家和地方工程建设规范标准<br>
-                • 项目设计图纸技术要求<br>
-                • 施工质量验收标准<br>
-                • 安全技术规范<br><br>
-                请直接提出您的问题，比如"混凝土保护层厚度要求"或"脚手架连墙件间距规定"。
+                您好！我是您的工程监理智能助手。我会自动搜索所有数据库为您提供答案：<br>
+                • 📋 国家和行业标准（GB、JGJ、CJJ等）<br>
+                • ⚖️ 法律法规和管理办法<br>
+                • 📚 工程技术规范要求<br>
+                • 🔗 相关文档的官方链接<br><br>
+                请直接提出您的问题，比如"住宅专项维修资金提取标准"或"钢筋连接质量要求"。
             </div>
         `;
         this.messageHistory = [];
@@ -370,7 +293,6 @@ class ChatManager {
     exportChat() {
         const exportData = {
             sessionId: this.sessionId,
-            knowledgeBase: this.currentKnowledgeBase,
             messages: this.messageHistory,
             exportTime: new Date().toISOString()
         };
@@ -407,11 +329,5 @@ function askExample(question) {
 function clearInput() {
     if (chatManager) {
         chatManager.clearInput();
-    }
-}
-
-function switchKnowledgeBase() {
-    if (chatManager) {
-        chatManager.switchKnowledgeBase();
     }
 } 

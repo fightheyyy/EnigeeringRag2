@@ -130,31 +130,7 @@ body {
     z-index: 1;
 }
 
-/* 知识库选择器 */
-.kb-selector {
-    background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 8px;
-    color: white;
-    padding: 10px 14px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: var(--transition);
-    position: relative;
-    z-index: 1;
-    backdrop-filter: blur(10px);
-}
 
-.kb-selector:hover {
-    background: rgba(255,255,255,0.25);
-    border-color: rgba(255,255,255,0.5);
-}
-
-.kb-selector option {
-    background: var(--dark-bg);
-    color: white;
-    padding: 10px;
-}
 
 /* 聊天消息区域 */
 .chat-messages {

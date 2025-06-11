@@ -178,6 +178,16 @@ async def ask_question(request: QuestionRequest):
     try:
         logger.info(f"收到问题: {request.question}")
         
+        # 初始化所有知识库管理器
+        standards_kb_manager = KnowledgeBaseManager(
+            api_key=config.bigmodel_api_key,
+            collection_name="standards"
+        )
+        regulations_kb_manager = KnowledgeBaseManager(
+            api_key=config.bigmodel_api_key,
+            collection_name="regulations"
+        )
+        
         # 增强问题表述
         enhanced_question = enhance_engineering_question(request.question)
         
@@ -200,18 +210,37 @@ async def ask_question(request: QuestionRequest):
                 "厕所布局要求"
             ])
         
-        # 执行多重检索并合并结果
+        # 执行多重检索并合并结果（同时搜索所有知识库）
         all_results = []
         seen_content = set()  # 避免重复内容
         
+        logger.info("🔍 开始检索所有知识库...")
+        
         for query in search_queries:
-            sources_result = kb_manager.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
+            # 搜索国家标准库
+            logger.info(f"📊 搜索standards库: {query}")
+            standards_result = standards_kb_manager.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
             
-            if sources_result and "results" in sources_result:
-                for result in sources_result["results"]:
-                    content_hash = hash(result['content'][:100])  # 使用内容前100字符的哈希避免重复
+            if standards_result and "results" in standards_result:
+                for result in standards_result["results"]:
+                    content_hash = hash(result['content'][:100])
                     if content_hash not in seen_content:
                         seen_content.add(content_hash)
+                        # 标记来源为standards
+                        result['source_type'] = 'standards'
+                        all_results.append(result)
+            
+            # 搜索法规库
+            logger.info(f"🏛️ 搜索regulations库: {query}")
+            regulations_result = regulations_kb_manager.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
+            
+            if regulations_result and "results" in regulations_result:
+                for result in regulations_result["results"]:
+                    content_hash = hash(result['content'][:100])
+                    if content_hash not in seen_content:
+                        seen_content.add(content_hash)
+                        # 标记来源为regulations
+                        result['source_type'] = 'regulations'
                         all_results.append(result)
         
         # 按相似度排序并取前N个结果
@@ -253,50 +282,6 @@ async def ask_question(request: QuestionRequest):
         session_id = request.session_id or "default"
         history = session_history.get(session_id, [])
         
-        # 查询相关标准信息
-        related_standards = []
-        if standards_service:
-            try:
-                logger.info(f"开始查询相关标准，检索到 {len(sources)} 个文档片段")
-                
-                for i, source in enumerate(sources):
-                    logger.info(f"处理文档片段 {i+1}/{len(sources)}: {source.metadata.get('standard_number', '未知')}")
-                    
-                    # 从文档内容和元数据中查找相关标准
-                    standards = standards_service.find_standards_for_content(
-                        source.content, 
-                        source.metadata
-                    )
-                    logger.info(f"  匹配到 {len(standards)} 个标准")
-                    
-                    for std in standards:
-                        logger.info(f"    - {std.standard_number}: {std.standard_name}")
-                        logger.info(f"      URL: {std.file_url}")
-                    
-                    related_standards.extend(standards)
-                
-                # 去重
-                seen_ids = set()
-                unique_standards = []
-                for standard in related_standards:
-                    if standard.id not in seen_ids:
-                        seen_ids.add(standard.id)
-                        unique_standards.append(standard)
-                related_standards = unique_standards[:3]  # 最多返回3个相关标准
-                
-                if related_standards:
-                    logger.info(f"✅ 最终匹配到 {len(related_standards)} 个相关标准")
-                    for std in related_standards:
-                        logger.info(f"  - {std.standard_number}: {std.standard_name}")
-                        logger.info(f"    URL: {std.file_url}")
-                else:
-                    logger.warning("❌ 未找到相关标准")
-                    
-            except Exception as e:
-                logger.error(f"查询标准信息失败: {e}")
-                import traceback
-                traceback.print_exc()
-        
         # 生成答案
         response = llm_service.generate_answer(
             question=request.question,
@@ -304,27 +289,83 @@ async def ask_question(request: QuestionRequest):
             context_history=history
         )
         
+        # 根据大模型答案中的引用查询MySQL数据库获取URL
+        related_standards = []
+        related_regulations = []
+        
+        if standards_service:
+            try:
+                logger.info("🔍 分析大模型答案中的引用...")
+                
+                # 从答案中提取标准引用
+                answer_text = response.answer
+                standard_refs = standards_service.extract_standard_references(answer_text)
+                
+                if standard_refs:
+                    logger.info(f"📊 在答案中发现标准引用: {standard_refs}")
+                    for ref in standard_refs:
+                        standards = standards_service.search_standards_by_name(ref, 2)
+                        related_standards.extend(standards)
+                
+                # 检查答案中是否包含法规相关内容
+                regulation_keywords = [
+                    '管理办法', '规定', '条例', '暂行办法', '住宅专项维修资金',
+                    '售房单位', '售房款', '多层住宅', '高层住宅', '第八条'
+                ]
+                
+                has_regulation_content = any(keyword in answer_text for keyword in regulation_keywords)
+                
+                if has_regulation_content:
+                    logger.info("🏛️ 答案涉及法规内容，查询regulations表...")
+                    question_content = request.question
+                    combined_content = question_content + " " + answer_text[:500]  # 结合问题和答案前500字符
+                    regulations = standards_service.find_regulation_by_content_keywords(combined_content)
+                    related_regulations = regulations
+                
+                # 去重标准
+                if related_standards:
+                    seen_ids = set()
+                    unique_standards = []
+                    for standard in related_standards:
+                        if standard.id not in seen_ids:
+                            seen_ids.add(standard.id)
+                            unique_standards.append(standard)
+                    related_standards = unique_standards[:3]
+                
+                # 记录找到的资源
+                if related_standards:
+                    logger.info(f"✅ 找到 {len(related_standards)} 个相关标准:")
+                    for std in related_standards:
+                        logger.info(f"  - {std.standard_number}: {std.standard_name}")
+                        logger.info(f"    URL: {std.file_url}")
+                
+                if related_regulations:
+                    logger.info(f"✅ 找到 {len(related_regulations)} 个相关法规:")
+                    for reg in related_regulations:
+                        logger.info(f"  - {reg.legal_name}")
+                        logger.info(f"    URL: {reg.legal_url}")
+                    
+            except Exception as e:
+                logger.error(f"查询MySQL数据库失败: {e}")
+                import traceback
+                traceback.print_exc()
+        
         # 检查答案是否真正回答了问题（内容相关性检查）
-        irrelevant_keywords = [
-            "未检索到", "未找到", "没有找到", "无法找到", "不能找到",
-            "建议补充提供", "建议查阅", "需要查阅",
-            "根据提供的规范文档内容，未",
+        # 只有在确实没有检索到任何相关内容时才回退
+        critical_irrelevant_patterns = [
+            "根据提供的规范文档内容，未检索到",
+            "提供的文档中没有找到",
+            "文档中未包含相关信息",
             "[使用标准: 无]"
         ]
         
-        # 检查复合条件
-        compound_conditions = [
-            ("文档中主要涉及" in response.answer and "但未包含" in response.answer),
-            ("文档中主要涉及" in response.answer and "但未明确提及" in response.answer),
-            ("文档中主要涉及" in response.answer and "未包含" in response.answer),
-            ("根据提供的" in response.answer and "未检索到" in response.answer)
-        ]
+        # 检查是否是完全无关的回答（更严格的条件）
+        is_completely_irrelevant = any(pattern in response.answer for pattern in critical_irrelevant_patterns)
         
-        # 检查是否是不相关的回答
-        is_irrelevant = (any(keyword in response.answer for keyword in irrelevant_keywords) or 
-                        any(compound_conditions))
+        # 如果找到了相关的标准或法规，即使答案中有"未找到"等词汇，也不应该回退
+        has_relevant_resources = (len(related_standards) > 0 or len(related_regulations) > 0)
         
-        if is_irrelevant:
+        if is_completely_irrelevant and not has_relevant_resources:
             logger.warning("检索到的文档内容与问题不够相关，回退到模型知识回答")
             response = llm_service.generate_answer_without_context(request.question)
             
@@ -366,6 +407,17 @@ async def ask_question(request: QuestionRequest):
                     standard_info += "\n"
                 
                 response.answer += standard_info
+        
+        # 添加相关法规信息
+        if related_regulations:
+            regulation_info = "\n\n📋 **相关法律法规：**\n"
+            for regulation in related_regulations:
+                regulation_info += f"• **{regulation.legal_name}**\n"
+                if regulation.legal_url:
+                    regulation_info += f"  📄 [查看法规文档]({regulation.legal_url})\n"
+                regulation_info += "\n"
+            
+            response.answer += regulation_info
         
         # 更新会话历史
         history.append({"role": "user", "content": request.question})
