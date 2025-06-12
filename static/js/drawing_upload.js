@@ -125,6 +125,13 @@ async function confirmDrawingUpload() {
                 // 检测到重复文件
                 addDuplicateFileMessage(result);
                 showDuplicateConfirmDialog(result);
+            } else if (result.has_failed_record) {
+                // 检测到失败记录，显示信息但自动重新处理
+                addDuplicateFileMessage(result);
+                // 自动强制重新上传
+                setTimeout(() => {
+                    forceUploadDrawing();
+                }, 1000);
             } else {
                 // 上传成功
                 addUploadSuccessMessage(result);
@@ -250,27 +257,37 @@ function addDuplicateFileMessage(result) {
     
     const duplicateMessage = document.createElement('div');
     duplicateMessage.className = 'message assistant upload-duplicate-message';
+    
+    // 检查是否是失败的文件
+    const isFailed = result.existing_file.process_status === 'failed' || result.existing_file.vector_status === 'failed';
+    const statusColor = isFailed ? '#dc3545' : '#666';
+    const statusIcon = isFailed ? '❌' : '✅';
+    
     duplicateMessage.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span style="font-size: 1.2em;">⚠️</span>
-            <strong>检测到重复文件</strong>
+            <span style="font-size: 1.2em;">${isFailed ? '🔄' : '⚠️'}</span>
+            <strong>${isFailed ? '发现处理失败的文件' : '检测到重复文件'}</strong>
         </div>
-        <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid #ffeaa7;">
+        <div style="background: white; padding: 12px; border-radius: 8px; border: 1px solid ${isFailed ? '#f5c6cb' : '#ffeaa7'};">
             <div style="margin-bottom: 8px;"><strong>📋 ${result.existing_file.original_filename}</strong></div>
             <div style="font-size: 0.9em; color: #666; line-height: 1.4;">
-                • 已存在的文件ID: ${result.existing_file.id}<br>
+                • 文件ID: ${result.existing_file.id}<br>
                 • 上传时间: ${result.existing_file.upload_time}<br>
-                • 处理状态: ${result.existing_file.process_status}<br>
-                • 向量状态: ${result.existing_file.vector_status}
+                • 处理状态: <span style="color: ${statusColor};">${statusIcon} ${result.existing_file.process_status}</span><br>
+                • 向量状态: <span style="color: ${statusColor};">${statusIcon} ${result.existing_file.vector_status}</span>
+                ${result.existing_file.error_message ? `<br>• 错误信息: <span style="color: #dc3545;">${result.existing_file.error_message}</span>` : ''}
             </div>
             ${result.existing_file.minio_url ? `<div style="margin-top: 8px;">
                 <a href="${result.existing_file.minio_url}" target="_blank" style="color: #007bff; text-decoration: none;">
-                    🔗 查看已存在的文件
+                    🔗 查看文件
                 </a>
             </div>` : ''}
         </div>
-        <div style="margin-top: 12px; padding: 8px; background: #fff3cd; border-radius: 6px; font-size: 0.9em;">
-            💡 系统检测到相同的文件已经存在，您可以选择强制重新上传或取消操作
+        <div style="margin-top: 12px; padding: 8px; background: ${isFailed ? '#f8d7da' : '#fff3cd'}; border-radius: 6px; font-size: 0.9em;">
+            ${isFailed ? 
+                '💡 检测到之前处理失败的文件，系统将自动重新处理' : 
+                '💡 系统检测到相同的文件已经存在，您可以选择强制重新上传或取消操作'
+            }
         </div>
     `;
     

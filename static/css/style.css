@@ -54,7 +54,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 20px;
     position: relative;
@@ -86,7 +86,9 @@ body {
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
     overflow: hidden;
-    height: 600px;
+    height: 75vh;
+    min-height: 700px;
+    max-height: 900px;
     display: flex;
     flex-direction: column;
     backdrop-filter: blur(10px);
@@ -135,24 +137,25 @@ body {
 /* 聊天消息区域 */
 .chat-messages {
     flex: 1;
-    padding: 20px;
+    padding: 24px 30px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
     scroll-behavior: smooth;
 }
 
 /* 消息样式 */
 .message {
-    max-width: 85%;
-    padding: 16px 20px;
+    max-width: 90%;
+    padding: 18px 24px;
     border-radius: 20px;
     word-wrap: break-word;
-    line-height: 1.5;
+    line-height: 1.6;
     position: relative;
     animation: slideIn 0.3s ease-out;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    font-size: 1rem;
 }
 
 @keyframes slideIn {
@@ -269,16 +272,16 @@ body {
 /* 输入区域 */
 .chat-input {
     display: flex;
-    padding: 20px;
+    padding: 24px 30px;
     border-top: 1px solid var(--border-color);
-    gap: 12px;
+    gap: 16px;
     align-items: flex-end;
     background: white;
 }
 
 .chat-input input {
     flex: 1;
-    padding: 14px 18px;
+    padding: 16px 22px;
     border: 2px solid var(--border-color);
     border-radius: 25px;
     outline: none;
@@ -286,6 +289,7 @@ body {
     font-family: var(--font-family);
     transition: var(--transition);
     resize: none;
+    min-height: 50px;
 }
 
 .chat-input input:focus {
@@ -427,25 +431,37 @@ body {
 @media (max-width: 768px) {
     .container {
         padding: 10px;
+        max-width: 100%;
     }
     
     .chat-container {
-        height: 70vh;
+        height: 80vh;
+        min-height: 600px;
+        max-height: 800px;
+    }
+    
+    .chat-messages {
+        padding: 16px 20px;
+        gap: 16px;
     }
     
     .chat-header {
         flex-direction: column;
         gap: 10px;
         text-align: center;
+        padding: 16px;
     }
     
     .message {
         max-width: 95%;
+        padding: 14px 18px;
+        font-size: 0.95rem;
     }
     
     .chat-input {
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
+        padding: 20px;
     }
     
     .input-actions {

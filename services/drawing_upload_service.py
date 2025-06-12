@@ -33,7 +33,7 @@ class DrawingUploadService:
         self.config = Config()
         
         # Gemini API配置 (使用OpenRouter)
-        self.openrouter_api_key = "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"
+        self.openrouter_api_key = "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"
         self.base_url = "https://openrouter.ai/api/v1"
         self.model_name = "google/gemini-2.5-pro-preview"
         
@@ -410,6 +410,7 @@ class DrawingUploadService:
         """
         检查重复文件
         通过文件大小和原始文件名进行初步检测
+        如果文件处理失败，允许重新上传
         """
         connection = None
         try:
@@ -418,7 +419,7 @@ class DrawingUploadService:
                 # 检查相同文件名和文件大小的记录
                 check_sql = """
                 SELECT id, drawing_name, original_filename, minio_url, upload_time, 
-                       process_status, vector_status
+                       process_status, vector_status, error_message
                 FROM project_drawings 
                 WHERE original_filename = %s AND file_size = %s
                 ORDER BY upload_time DESC
@@ -429,18 +430,38 @@ class DrawingUploadService:
                 result = cursor.fetchone()
                 
                 if result:
-                    return {
-                        "is_duplicate": True,
-                        "existing_file": {
-                            "id": result["id"],
-                            "drawing_name": result["drawing_name"],
-                            "original_filename": result["original_filename"],
-                            "minio_url": result["minio_url"],
-                            "upload_time": result["upload_time"].strftime("%Y-%m-%d %H:%M:%S"),
-                            "process_status": result["process_status"],
-                            "vector_status": result["vector_status"]
+                    # 如果文件处理失败，允许重新上传
+                    if result["process_status"] == "failed" or result["vector_status"] == "failed":
+                        logger.info(f"🔄 发现失败的文件记录，允许重新上传: {original_filename}")
+                        return {
+                            "is_duplicate": False,
+                            "has_failed_record": True,
+                            "failed_record_id": result["id"],
+                            "existing_file": {
+                                "id": result["id"],
+                                "drawing_name": result["drawing_name"],
+                                "original_filename": result["original_filename"],
+                                "minio_url": result["minio_url"],
+                                "upload_time": result["upload_time"].strftime("%Y-%m-%d %H:%M:%S"),
+                                "process_status": result["process_status"],
+                                "vector_status": result["vector_status"],
+                                "error_message": result.get("error_message", "")
+                            }
                         }
-                    }
+                    else:
+                        # 文件处理成功，视为重复
+                        return {
+                            "is_duplicate": True,
+                            "existing_file": {
+                                "id": result["id"],
+                                "drawing_name": result["drawing_name"],
+                                "original_filename": result["original_filename"],
+                                "minio_url": result["minio_url"],
+                                "upload_time": result["upload_time"].strftime("%Y-%m-%d %H:%M:%S"),
+                                "process_status": result["process_status"],
+                                "vector_status": result["vector_status"]
+                            }
+                        }
                 else:
                     return {"is_duplicate": False}
                     
@@ -472,6 +493,7 @@ class DrawingUploadService:
         
         try:
             # 1. 检查重复文件（除非强制上传）
+            failed_record_id = None
             if not force_upload:
                 duplicate_check = self.check_duplicate_file(file_bytes, original_filename)
                 if duplicate_check["is_duplicate"]:
@@ -482,6 +504,10 @@ class DrawingUploadService:
                         "existing_file": duplicate_check["existing_file"],
                         "message": "检测到重复文件，如需重新上传请确认"
                     }
+                elif duplicate_check.get("has_failed_record"):
+                    # 记录失败记录的ID，稍后删除
+                    failed_record_id = duplicate_check["failed_record_id"]
+                    logger.info(f"🔄 准备重新处理失败的文件: {original_filename} (旧记录ID: {failed_record_id})")
             
             # 2. 清理文件名并生成唯一名称
             clean_filename = self.sanitize_filename(original_filename)
@@ -551,7 +577,20 @@ class DrawingUploadService:
                 vector_chunks_count=vector_chunks_count
             )
             
-            # 11. 清理临时文件
+            # 11. 删除旧的失败记录（如果存在）
+            if failed_record_id and failed_record_id != drawing_id:
+                try:
+                    connection = self._get_mysql_connection()
+                    with connection.cursor() as cursor:
+                        # 删除旧的失败记录
+                        cursor.execute("DELETE FROM project_drawings WHERE id = %s", (failed_record_id,))
+                        connection.commit()
+                        logger.info(f"🗑️ 已删除旧的失败记录: ID {failed_record_id}")
+                    connection.close()
+                except Exception as e:
+                    logger.warning(f"⚠️ 删除旧记录失败: {e}")
+            
+            # 12. 清理临时文件
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
             
