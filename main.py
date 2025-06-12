@@ -14,6 +14,7 @@ from core.models import QuestionRequest, AnswerResponse, KnowledgeDocument, Syst
 from services.bigmodel_knowledge_base import BigModelKnowledgeBase as KnowledgeBaseManager
 from services.llm_service import LLMService, enhance_engineering_question
 from services.mysql_standards_service import get_mysql_standards_service
+from services.drawing_upload_service import get_drawing_service
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +67,14 @@ try:
 except Exception as e:
     logger.error(f"❌ MySQL标准数据库服务初始化失败: {e}")
     standards_service = None
+
+# 初始化图纸上传服务
+try:
+    drawing_service = get_drawing_service()
+    logger.info("✅ 图纸上传服务初始化成功")
+except Exception as e:
+    logger.error(f"❌ 图纸上传服务初始化失败: {e}")
+    drawing_service = None
 
 # 存储会话历史（生产环境中应使用数据库）
 session_history = {}
@@ -242,6 +251,23 @@ async def ask_question(request: QuestionRequest):
                         # 标记来源为regulations
                         result['source_type'] = 'regulations'
                         all_results.append(result)
+            
+            # 搜索图纸知识库
+            if drawing_service and drawing_service.drawings_kb:
+                try:
+                    logger.info(f"📋 搜索drawings库: {query}")
+                    drawings_result = drawing_service.drawings_kb.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
+                    
+                    if drawings_result and "results" in drawings_result:
+                        for result in drawings_result["results"]:
+                            content_hash = hash(result['content'][:100])
+                            if content_hash not in seen_content:
+                                seen_content.add(content_hash)
+                                # 标记来源为drawings
+                                result['source_type'] = 'drawings'
+                                all_results.append(result)
+                except Exception as e:
+                    logger.warning(f"图纸知识库搜索失败: {e}")
         
         # 按相似度排序并取前N个结果
         all_results.sort(key=lambda x: x.get('similarity', 0), reverse=True)
@@ -292,6 +318,7 @@ async def ask_question(request: QuestionRequest):
         # 根据大模型答案中的引用查询MySQL数据库获取URL
         related_standards = []
         related_regulations = []
+        related_drawings = []
         
         if standards_service:
             try:
@@ -369,6 +396,87 @@ async def ask_question(request: QuestionRequest):
                     for reg in related_regulations:
                         logger.info(f"  - {reg.legal_name}")
                         logger.info(f"    URL: {reg.legal_url}")
+                
+                # 检查答案中是否包含图纸相关内容并查询图纸URL
+                drawing_keywords = [
+                    '图纸', '大样', '详图', '平面图', '立面图', '剖面图', 
+                    '节点图', '构造图', '配筋图', '墙柱', '梁板', '基础图',
+                    '施工图', '设计图', '建筑图', '结构图', '设备图'
+                ]
+                
+                has_drawing_content = any(keyword in answer_text for keyword in drawing_keywords)
+                
+                if has_drawing_content and drawing_service:
+                    logger.info("📋 检测到图纸相关内容，查询图纸数据库...")
+                    try:
+                        # 从答案中提取可能的图纸名称
+                        drawing_names = []
+                        
+                        # 查找括号中的图纸名称
+                        import re
+                        bracket_matches = re.findall(r'[（(]([^）)]*图[^）)]*)[）)]', answer_text)
+                        drawing_names.extend(bracket_matches)
+                        
+                        # 查找直接提到的图纸名称
+                        for keyword in drawing_keywords:
+                            if keyword in answer_text:
+                                # 提取包含关键词的短语
+                                pattern = rf'[\w\d_\-\.]*{keyword}[\w\d_\-\.]*'
+                                matches = re.findall(pattern, answer_text)
+                                drawing_names.extend(matches)
+                        
+                        # 去重并查询数据库
+                        unique_drawing_names = list(set(drawing_names))
+                        logger.info(f"🔍 提取到的图纸名称: {unique_drawing_names}")
+                        
+                        for drawing_name in unique_drawing_names:
+                            if len(drawing_name) > 3:  # 过滤太短的匹配
+                                drawings = drawing_service.get_drawings_list(limit=10)
+                                for drawing_info in drawings:
+                                    if (drawing_name in drawing_info.get('drawing_name', '') or 
+                                        drawing_name in drawing_info.get('original_filename', '')):
+                                        related_drawings.append(drawing_info)
+                                        break
+                        
+                        # 如果没有找到具体的图纸，尝试通过问题内容搜索
+                        if not related_drawings:
+                            question_content = request.question
+                            combined_content = question_content + " " + answer_text[:300]
+                            
+                            # 使用图纸搜索功能
+                            search_results = drawing_service.search_drawings_in_vector_db(
+                                query=combined_content, 
+                                top_k=3
+                            )
+                            
+                            if search_results:
+                                for result in search_results:
+                                    drawing_id = result.get('metadata', {}).get('drawing_id')
+                                    if drawing_id:
+                                        drawings = drawing_service.get_drawings_list(limit=50)
+                                        for drawing_info in drawings:
+                                            if drawing_info.get('id') == drawing_id:
+                                                related_drawings.append(drawing_info)
+                                                break
+                        
+                        # 去重
+                        if related_drawings:
+                            seen_ids = set()
+                            unique_drawings = []
+                            for drawing in related_drawings:
+                                if drawing.get('id') not in seen_ids:
+                                    seen_ids.add(drawing.get('id'))
+                                    unique_drawings.append(drawing)
+                            related_drawings = unique_drawings[:3]  # 最多显示3个图纸
+                        
+                        if related_drawings:
+                            logger.info(f"✅ 找到 {len(related_drawings)} 个相关图纸:")
+                            for drawing in related_drawings:
+                                logger.info(f"  - {drawing.get('drawing_name', '未知图纸')}")
+                                logger.info(f"    URL: {drawing.get('minio_url', '无URL')}")
+                    
+                    except Exception as e:
+                        logger.error(f"查询图纸数据库失败: {e}")
                     
             except Exception as e:
                 logger.error(f"查询MySQL数据库失败: {e}")
@@ -387,8 +495,8 @@ async def ask_question(request: QuestionRequest):
         # 检查是否是完全无关的回答（更严格的条件）
         is_completely_irrelevant = any(pattern in response.answer for pattern in critical_irrelevant_patterns)
         
-        # 如果找到了相关的标准或法规，即使答案中有"未找到"等词汇，也不应该回退
-        has_relevant_resources = (len(related_standards) > 0 or len(related_regulations) > 0)
+        # 如果找到了相关的标准、法规或图纸，即使答案中有"未找到"等词汇，也不应该回退
+        has_relevant_resources = (len(related_standards) > 0 or len(related_regulations) > 0 or len(related_drawings) > 0)
         
         if is_completely_irrelevant and not has_relevant_resources:
             logger.warning("检索到的文档内容与问题不够相关，回退到模型知识回答")
@@ -443,6 +551,31 @@ async def ask_question(request: QuestionRequest):
                 regulation_info += "\n"
             
             response.answer += regulation_info
+        
+        # 添加相关图纸信息
+        if related_drawings:
+            drawing_info = "\n\n📋 **相关工程图纸：**\n"
+            for drawing in related_drawings:
+                drawing_name = drawing.get('drawing_name') or drawing.get('original_filename', '未知图纸')
+                drawing_info += f"• **{drawing_name}**\n"
+                
+                # 添加项目信息
+                if drawing.get('project_name'):
+                    drawing_info += f"  项目: {drawing.get('project_name')}\n"
+                
+                # 添加图纸类型
+                if drawing.get('drawing_type'):
+                    drawing_info += f"  类型: {drawing.get('drawing_type')}\n"
+                
+                # 添加图纸URL
+                if drawing.get('minio_url'):
+                    drawing_info += f"  📄 [查看图纸文档]({drawing.get('minio_url')})\n"
+                elif drawing.get('file_url'):
+                    drawing_info += f"  📄 [查看图纸文档]({drawing.get('file_url')})\n"
+                
+                drawing_info += "\n"
+            
+            response.answer += drawing_info
         
         # 更新会话历史
         history.append({"role": "user", "content": request.question})
@@ -780,6 +913,215 @@ async def switch_knowledge_base(request: dict):
     except Exception as e:
         logger.error(f"切换知识库失败: {e}")
         raise HTTPException(status_code=500, detail=f"切换知识库失败: {str(e)}")
+
+@app.post("/upload-drawing")
+async def upload_project_drawing(
+    file: UploadFile = File(...),
+    project_name: str = Form(None),
+    drawing_type: str = Form(None),
+    drawing_phase: str = Form(None),
+    created_by: str = Form(None),
+    force_upload: bool = Form(False)
+):
+    """
+    上传项目图纸PDF文档
+    支持：重复检测、上传到MinIO、记录到MySQL、Gemini文本提取、向量化存储
+    """
+    if not drawing_service:
+        raise HTTPException(status_code=500, detail="图纸上传服务未初始化")
+    
+    # 验证文件类型
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="只支持PDF格式的图纸文件")
+    
+    # 验证文件大小（限制为100MB）
+    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+    file_content = await file.read()
+    if len(file_content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件太大，最大支持100MB")
+    
+    try:
+        logger.info(f"📋 开始处理图纸上传: {file.filename}")
+        
+        # 处理图纸上传
+        result = drawing_service.process_drawing_upload(
+            file_bytes=file_content,
+            original_filename=file.filename,
+            project_name=project_name,
+            drawing_type=drawing_type,
+            drawing_phase=drawing_phase,
+            created_by=created_by,
+            force_upload=force_upload
+        )
+        
+        if result.get("success"):
+            return {
+                "message": "图纸上传和处理成功",
+                "drawing_id": result["drawing_id"],
+                "drawing_name": result["drawing_name"],
+                "original_filename": result["original_filename"],
+                "minio_url": result["minio_url"],
+                "vector_chunks_count": result["vector_chunks_count"],
+                "process_status": result["process_status"],
+                "vector_status": result["vector_status"],
+                "file_size_mb": round(len(file_content) / 1024 / 1024, 2),
+                "knowledge_base": "drawings"
+            }
+        elif result.get("is_duplicate"):
+            # 返回重复文件信息，让前端处理
+            return {
+                "message": "检测到重复文件",
+                "is_duplicate": True,
+                "existing_file": result["existing_file"],
+                "duplicate_message": result["message"]
+            }
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"图纸处理失败: {result.get('error', '未知错误')}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 图纸上传失败: {e}")
+        raise HTTPException(status_code=500, detail=f"图纸上传失败: {str(e)}")
+
+@app.get("/drawings")
+async def get_drawings_list(
+    project_name: str = None,
+    drawing_type: str = None,
+    limit: int = 50
+):
+    """获取图纸列表"""
+    if not drawing_service:
+        raise HTTPException(status_code=500, detail="图纸上传服务未初始化")
+    
+    try:
+        drawings = drawing_service.get_drawings_list(
+            project_name=project_name,
+            drawing_type=drawing_type,
+            limit=limit
+        )
+        
+        return {
+            "message": "获取图纸列表成功",
+            "count": len(drawings),
+            "drawings": drawings,
+            "filters": {
+                "project_name": project_name,
+                "drawing_type": drawing_type,
+                "limit": limit
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 获取图纸列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取图纸列表失败: {str(e)}")
+
+@app.get("/search-drawings")
+async def search_project_drawings(
+    query: str,
+    top_k: int = 5,
+    project_name: str = None,
+    drawing_type: str = None
+):
+    """在图纸向量数据库中搜索相关内容"""
+    if not drawing_service:
+        raise HTTPException(status_code=500, detail="图纸上传服务未初始化")
+    
+    try:
+        results = drawing_service.search_drawings_in_vector_db(
+            query=query,
+            top_k=top_k,
+            project_name=project_name,
+            drawing_type=drawing_type
+        )
+        
+        return {
+            "message": "图纸搜索完成",
+            "query": query,
+            "results_count": len(results),
+            "results": results,
+            "filters": {
+                "project_name": project_name,
+                "drawing_type": drawing_type,
+                "top_k": top_k
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 图纸搜索失败: {e}")
+        raise HTTPException(status_code=500, detail=f"图纸搜索失败: {str(e)}")
+
+@app.get("/drawings-stats")
+async def get_drawings_statistics():
+    """获取图纸统计信息"""
+    if not drawing_service:
+        raise HTTPException(status_code=500, detail="图纸上传服务未初始化")
+    
+    try:
+        # 获取向量知识库统计
+        kb_stats = drawing_service.drawings_kb.get_knowledge_base_stats()
+        
+        # 获取MySQL数据库统计
+        connection = drawing_service._get_mysql_connection()
+        try:
+            with connection.cursor() as cursor:
+                # 总图纸数量
+                cursor.execute("SELECT COUNT(*) as total FROM project_drawings")
+                total_count = cursor.fetchone()["total"]
+                
+                # 按项目分组统计
+                cursor.execute("""
+                    SELECT project_name, COUNT(*) as count 
+                    FROM project_drawings 
+                    WHERE project_name IS NOT NULL 
+                    GROUP BY project_name 
+                    ORDER BY count DESC 
+                    LIMIT 10
+                """)
+                project_stats = cursor.fetchall()
+                
+                # 按图纸类型分组统计
+                cursor.execute("""
+                    SELECT drawing_type, COUNT(*) as count 
+                    FROM project_drawings 
+                    WHERE drawing_type IS NOT NULL 
+                    GROUP BY drawing_type 
+                    ORDER BY count DESC
+                """)
+                type_stats = cursor.fetchall()
+                
+                # 按状态统计
+                cursor.execute("""
+                    SELECT 
+                        process_status,
+                        vector_status,
+                        COUNT(*) as count 
+                    FROM project_drawings 
+                    GROUP BY process_status, vector_status
+                """)
+                status_stats = cursor.fetchall()
+                
+        finally:
+            connection.close()
+        
+        return {
+            "message": "图纸统计信息获取成功",
+            "mysql_stats": {
+                "total_drawings": total_count,
+                "project_distribution": project_stats,
+                "type_distribution": type_stats,
+                "status_distribution": status_stats
+            },
+            "vector_kb_stats": kb_stats,
+            "knowledge_base_name": "drawings"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 获取图纸统计失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取图纸统计失败: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
