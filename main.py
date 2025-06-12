@@ -309,11 +309,36 @@ async def ask_question(request: QuestionRequest):
                 
                 # 检查答案中是否包含法规相关内容
                 regulation_keywords = [
-                    '管理办法', '规定', '条例', '暂行办法', '住宅专项维修资金',
-                    '售房单位', '售房款', '多层住宅', '高层住宅', '第八条'
+                    '管理办法', '条例', '暂行办法', '住宅专项维修资金',
+                    '售房单位', '售房款', '第八条', '行政处罚',
+                    '法律责任', '行政管理', '监督管理', '资金管理',
+                    '违法行为', '处罚标准', '法定职责'
                 ]
                 
-                has_regulation_content = any(keyword in answer_text for keyword in regulation_keywords)
+                # 排除技术标准中的常见词汇
+                technical_excludes = [
+                    '根据.*《.*》.*规定',  # 更精确：根据《标准名称》的规定
+                    '根据.*标准.*规定', '根据.*规范.*规定', 
+                    '技术规定', '质量规定', '施工规定', '设计规定', 
+                    '检验规定', '性能规定', '组分规定', '掺量规定', 
+                    '强度规定', 'GB.*规定', 'JGJ.*规定', 'CJJ.*规定'
+                ]
+                
+                has_regulation_content = False
+                # 检查是否包含明确的法规关键词
+                if any(keyword in answer_text for keyword in regulation_keywords):
+                    # 进一步验证：排除技术标准相关的"规定"
+                    is_technical_regulation = any(
+                        re.search(pattern, answer_text, re.IGNORECASE) 
+                        for pattern in technical_excludes
+                    )
+                    
+                    # 只有在不是技术标准相关的"规定"时才认为是法规内容
+                    if not is_technical_regulation:
+                        has_regulation_content = True
+                        logger.info("🏛️ 检测到法规相关内容，但已排除技术标准规定")
+                    else:
+                        logger.info("📋 检测到技术标准规定，不查询法规数据库")
                 
                 if has_regulation_content:
                     logger.info("🏛️ 答案涉及法规内容，查询regulations表...")
