@@ -64,16 +64,24 @@ chroma_db/
 *.sqlite3
 *.db
 
-# 向量数据库
+# 向量数据库 - 详细规则
 data/chroma_db/
+data/chroma_db/**/*
 data/chroma_db_cloud/
 data/chroma_db_backup/
 data/sync_log.json
+# 特别忽略向量数据库的运行时文件
+**/chroma.sqlite3
+**/length.bin
+**/data_level0.bin
+**/header.bin
+**/link_lists.bin
 
 # 图纸存储和处理
 drawings/
 extracted_texts/
 extracted_drawing_texts/
+temp_drawings/
 minio_data/
 
 # 缓存目录
