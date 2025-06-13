@@ -73,6 +73,7 @@ data/sync_log.json
 # 图纸存储和处理
 drawings/
 extracted_texts/
+extracted_drawing_texts/
 minio_data/
 
 # 缓存目录
