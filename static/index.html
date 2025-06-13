@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工程监理智能问答系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ 工程监理智能问答系统</h1>
+            <p>专业的规范查询与图纸解读助手</p>
+        </div>
+        
+        <div class="chat-container">
+            <div class="chat-header">
+                <div>
+                    <h3>智能助手在线</h3>
+                    <p id="headerDescription">我可以同时查询工程规范、国家标准和法律法规，为您提供全面准确的答案</p>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    您好！我是您的工程监理智能助手。我会自动搜索所有数据库为您提供答案：<br>
+                    • 📋 国家和行业标准（GB、JGJ、CJJ等）<br>
+                    • ⚖️ 法律法规和管理办法<br>
+                    • 📚 工程技术规范要求<br>
+                    • 🏗️ 项目图纸内容解读<br>
+                    • 🔗 相关文档的官方链接<br><br>
+                    您可以：<br>
+                    • 直接提问，如"住宅专项维修资金提取标准"<br>
+                    • 点击 📋 按钮上传PDF图纸进行解读<br>
+                    • 拖拽PDF文件到聊天窗口快速上传
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <span>正在查询相关规范和图纸...</span>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="请输入您的问题..." maxlength="500" />
+                <input type="file" id="drawingFileInput" accept=".pdf" style="display: none;" />
+                <div class="input-actions">
+                    <span class="char-count" id="charCount">0/500</span>
+                    <button onclick="clearInput()" id="clearButton" title="清空输入">🗑️</button>
+                    <button onclick="triggerDrawingUpload()" id="uploadButton" title="上传图纸PDF">📋</button>
+                    <button onclick="sendMessage()" id="sendButton">
+                        <span class="send-text">发送</span>
+                        <span class="send-icon">📤</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 图纸上传信息面板 -->
+            <div class="drawing-upload-panel" id="drawingUploadPanel" style="display: none;">
+                <div class="upload-info">
+                    <div class="file-info">
+                        <span class="file-icon">📄</span>
+                        <div class="file-details">
+                            <div class="file-name" id="uploadFileName">文件名</div>
+                            <div class="file-size" id="uploadFileSize">文件大小</div>
+                        </div>
+                    </div>
+                    <div class="upload-form">
+                        <input type="text" id="uploadProjectName" placeholder="项目名称（可选）" />
+                        <select id="uploadDrawingType">
+                            <option value="">图纸类型（可选）</option>
+                            <option value="建筑">建筑图</option>
+                            <option value="结构">结构图</option>
+                            <option value="给排水">给排水图</option>
+                            <option value="电气">电气图</option>
+                            <option value="暖通">暖通图</option>
+                            <option value="装修">装修图</option>
+                            <option value="其他">其他</option>
+                        </select>
+                        <select id="uploadDrawingPhase">
+                            <option value="">设计阶段（可选）</option>
+                            <option value="方案设计">方案设计</option>
+                            <option value="初步设计">初步设计</option>
+                            <option value="施工图设计">施工图设计</option>
+                            <option value="竣工图">竣工图</option>
+                        </select>
+                    </div>
+                    <div class="upload-actions">
+                        <button onclick="cancelDrawingUpload()" class="cancel-btn">取消</button>
+                        <button onclick="confirmDrawingUpload()" class="confirm-btn">上传处理</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="examples">
+            <h3>💡 常见问题示例</h3>
+            <div class="example-questions" id="exampleQuestions">
+                <!-- 动态加载示例问题 -->
+            </div>
+        </div>
+
+        <div class="examples">
+            <h3>📋 图纸上传功能</h3>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                <p><strong>两种上传方式：</strong></p>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>点击输入框旁的 📋 按钮选择PDF文件</li>
+                    <li>直接拖拽PDF文件到聊天窗口</li>
+                </ul>
+                <p style="margin: 8px 0; color: #666; font-size: 0.9em;">
+                    支持建筑、结构、给排水、电气、暖通等各类工程图纸，上传后可直接询问图纸相关问题。
+                </p>
+            </div>
+        </div>
+        
+        <!-- 返回顶部按钮 -->
+        <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+    </div>
+
+    <!-- 加载JavaScript -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/chat.js"></script>
+    <script src="/static/js/performance.js"></script>
+    <script src="/static/js/drawing_upload.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html> 

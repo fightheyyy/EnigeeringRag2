@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目图纸上传</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        .file-upload { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 5px; }
+        .upload-btn { background: #007bff; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; }
+        .upload-btn:disabled { background: #ccc; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 项目图纸上传</h1>
+            <p>上传PDF格式的工程图纸，系统将自动提取文本并建立向量知识库</p>
+        </div>
+
+        <form id="uploadForm">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="projectName">项目名称</label>
+                    <input type="text" id="projectName" placeholder="例如：XX大厦工程">
+                </div>
+                <div class="form-group">
+                    <label for="drawingType">图纸类型</label>
+                    <select id="drawingType">
+                        <option value="">请选择图纸类型</option>
+                        <option value="建筑">建筑图</option>
+                        <option value="结构">结构图</option>
+                        <option value="给排水">给排水图</option>
+                        <option value="电气">电气图</option>
+                        <option value="暖通">暖通图</option>
+                        <option value="装修">装修图</option>
+                        <option value="其他">其他</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="drawingPhase">设计阶段</label>
+                    <select id="drawingPhase">
+                        <option value="">请选择设计阶段</option>
+                        <option value="方案设计">方案设计</option>
+                        <option value="初步设计">初步设计</option>
+                        <option value="施工图设计">施工图设计</option>
+                        <option value="竣工图">竣工图</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="createdBy">上传者</label>
+                    <input type="text" id="createdBy" placeholder="您的姓名">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>选择PDF图纸文件</label>
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <div id="uploadText">📄 点击选择PDF文件 (最大100MB)</div>
+                    <input type="file" id="fileInput" accept=".pdf" style="display: none;">
+                </div>
+            </div>
+
+            <button type="submit" class="upload-btn" id="uploadBtn" disabled>🚀 开始上传和处理</button>
+        </form>
+
+        <div id="progress" class="result hidden">
+            <h3>⏳ 处理中...</h3>
+            <p id="progressText">准备上传...</p>
+        </div>
+
+        <div id="result" class="hidden"></div>
+
+        <div style="margin-top: 30px; text-align: center;">
+            <a href="/">🏠 返回首页</a> | 
+            <a href="/admin">⚙️ 管理页面</a>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.type !== 'application/pdf') {
+                    alert('请选择PDF格式的文件');
+                    return;
+                }
+                if (file.size > 100 * 1024 * 1024) {
+                    alert('文件大小不能超过100MB');
+                    return;
+                }
+                selectedFile = file;
+                document.getElementById('uploadText').innerHTML = 
+                    `✅ 已选择: ${file.name} (${(file.size/1024/1024).toFixed(2)}MB)`;
+                document.getElementById('uploadBtn').disabled = false;
+            }
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!selectedFile) {
+                alert('请选择要上传的文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('project_name', document.getElementById('projectName').value);
+            formData.append('drawing_type', document.getElementById('drawingType').value);
+            formData.append('drawing_phase', document.getElementById('drawingPhase').value);
+            formData.append('created_by', document.getElementById('createdBy').value);
+
+            // 显示进度
+            document.getElementById('progress').classList.remove('hidden');
+            document.getElementById('result').classList.add('hidden');
+            document.getElementById('uploadBtn').disabled = true;
+
+            try {
+                const response = await fetch('/upload-drawing', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                document.getElementById('progress').classList.add('hidden');
+
+                if (response.ok) {
+                    document.getElementById('result').innerHTML = `
+                        <div class="success">
+                            <h3>✅ 图纸处理成功！</h3>
+                            <p><strong>图纸ID:</strong> ${result.drawing_id}</p>
+                            <p><strong>图纸名称:</strong> ${result.drawing_name}</p>
+                            <p><strong>文件大小:</strong> ${result.file_size_mb} MB</p>
+                            <p><strong>向量块数:</strong> ${result.vector_chunks_count}</p>
+                            <p><strong>处理状态:</strong> ${result.process_status}</p>
+                            <p><strong>存储链接:</strong> <a href="${result.minio_url}" target="_blank">查看文件</a></p>
+                        </div>
+                    `;
+                    // 重置表单
+                    document.getElementById('uploadForm').reset();
+                    selectedFile = null;
+                    document.getElementById('uploadText').innerHTML = '📄 点击选择PDF文件 (最大100MB)';
+                } else {
+                    document.getElementById('result').innerHTML = `
+                        <div class="error">
+                            <h3>❌ 处理失败</h3>
+                            <p>${result.detail || '上传失败'}</p>
+                        </div>
+                    `;
+                    document.getElementById('uploadBtn').disabled = false;
+                }
+            } catch (error) {
+                document.getElementById('progress').classList.add('hidden');
+                document.getElementById('result').innerHTML = `
+                    <div class="error">
+                        <h3>❌ 网络错误</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+                document.getElementById('uploadBtn').disabled = false;
+            }
+
+            document.getElementById('result').classList.remove('hidden');
+        });
+    </script>
+</body>
+</html> 
