@@ -290,6 +290,11 @@ body {
     transition: var(--transition);
     resize: none;
     min-height: 50px;
+    /* 防止iOS Safari的缩放问题 */
+    -webkit-appearance: none;
+    appearance: none;
+    /* 防止iOS Safari的自动缩放 */
+    -webkit-text-size-adjust: 100%;
 }
 
 .chat-input input:focus {
@@ -429,20 +434,29 @@ body {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+    body {
+        /* 防止iOS过度滚动 */
+        -webkit-overflow-scrolling: touch;
+        /* 防止拉动刷新 */
+        overscroll-behavior-y: contain;
+    }
+    
     .container {
         padding: 10px;
         max-width: 100%;
     }
     
     .chat-container {
-        height: 80vh;
-        min-height: 600px;
-        max-height: 800px;
+        height: 85vh;
+        min-height: 650px;
+        max-height: 90vh;
     }
     
     .chat-messages {
         padding: 16px 20px;
         gap: 16px;
+        /* 给底部输入框留出更多空间 */
+        padding-bottom: 120px;
     }
     
     .chat-header {
@@ -454,19 +468,90 @@ body {
     
     .message {
         max-width: 95%;
-        padding: 14px 18px;
-        font-size: 0.95rem;
+        padding: 16px 20px;
+        font-size: 1rem;
+        line-height: 1.6;
     }
     
+    /* 修复移动端输入框问题 */
     .chat-input {
-        flex-direction: column;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 2px solid var(--border-color);
+        padding: 16px 20px;
+        /* 为iPhone等设备的安全区域留出空间 */
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
+        padding-right: calc(20px + env(safe-area-inset-right));
+        padding-left: calc(20px + env(safe-area-inset-left));
         gap: 12px;
-        padding: 20px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+        z-index: 1000;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .chat-input input {
+        flex: 1;
+        padding: 14px 18px;
+        font-size: 16px;
+        min-height: 44px;
+        border-radius: 22px;
+        /* 防止iOS缩放 */
+        -webkit-appearance: none;
+        appearance: none;
+        /* 确保输入框不会被挤得太小 */
+        min-width: 0;
+        max-width: calc(100vw - 180px);
     }
     
     .input-actions {
-        justify-content: space-between;
-        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        /* 确保按钮组不会被挤压 */
+        min-width: fit-content;
+    }
+    
+    .char-count {
+        display: none; /* 在移动端隐藏字符计数 */
+    }
+    
+    #clearButton,
+    #uploadButton {
+        padding: 12px;
+        font-size: 18px;
+        min-width: 44px;
+        min-height: 44px;
+        border-radius: 22px;
+        /* 改善触摸体验 */
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+        touch-action: manipulation;
+    }
+    
+    #sendButton {
+        padding: 12px 18px;
+        font-size: 16px;
+        min-height: 44px;
+        min-width: 44px;
+        border-radius: 22px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        /* 改善触摸体验 */
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+        touch-action: manipulation;
+    }
+    
+    .send-text {
+        display: none; /* 在移动端只显示图标 */
+    }
+    
+    .send-icon {
+        font-size: 18px;
     }
     
     .example-questions {
@@ -475,6 +560,18 @@ body {
     
     .examples {
         padding: 20px;
+        margin-bottom: 80px; /* 为固定输入框留出空间 */
+    }
+    
+    /* 图纸上传面板移动端适配 */
+    .drawing-upload-panel {
+        position: fixed;
+        bottom: 80px; /* 在输入框上方 */
+        left: 10px;
+        right: 10px;
+        z-index: 999;
+        max-height: 50vh;
+        overflow-y: auto;
     }
 }
 
@@ -704,17 +801,158 @@ body {
     background: var(--primary-hover);
 }
 
+/* 更小屏幕的额外适配 */
+@media (max-width: 480px) {
+    .container {
+        padding: 5px;
+    }
+    
+    .chat-container {
+        height: 90vh;
+        min-height: 600px;
+    }
+    
+    .chat-messages {
+        padding: 12px 15px;
+        padding-bottom: 100px;
+    }
+    
+    .message {
+        padding: 12px 16px;
+        font-size: 0.95rem;
+    }
+    
+    .chat-input {
+        padding: 12px 15px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        padding-right: calc(15px + env(safe-area-inset-right));
+        padding-left: calc(15px + env(safe-area-inset-left));
+        gap: 8px;
+    }
+    
+    .chat-input input {
+        padding: 12px 16px;
+        font-size: 16px;
+        min-height: 40px;
+        /* 确保输入框不会被挤得太小 */
+        min-width: 0;
+        max-width: calc(100vw - 160px);
+    }
+    
+    #clearButton,
+    #uploadButton {
+        padding: 10px;
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 16px;
+    }
+    
+    #sendButton {
+        padding: 10px 14px;
+        min-height: 40px;
+        min-width: 40px;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+    
+    .examples {
+        padding: 15px;
+        margin-bottom: 70px;
+    }
+    
+    .example-question {
+        padding: 12px;
+        font-size: 0.9rem;
+    }
+}
+
+/* 横屏模式适配 */
+@media (max-width: 768px) and (orientation: landscape) {
+    .chat-container {
+        height: 80vh;
+        min-height: 400px;
+    }
+    
+    .chat-messages {
+        padding-bottom: 90px;
+    }
+    
+    .examples {
+        margin-bottom: 60px;
+    }
+}
+
 /* 移动端视图特殊样式 */
 .mobile-view .chat-header {
-    padding: 15px;
+    padding: 12px;
 }
 
 .mobile-view .chat-input {
-    padding: 15px;
+    padding: 12px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
 }
 
 .mobile-view .examples {
     padding: 20px 15px;
+    margin-bottom: 70px;
+}
+
+/* 键盘弹出时的优化 */
+@media (max-width: 768px) {
+    /* 当键盘弹出时，视口高度会变小，我们需要调整容器高度 */
+    .chat-container {
+        height: 100vh;
+        height: 100dvh; /* 动态视口高度，支持的浏览器会使用这个 */
+    }
+    
+    /* 优化输入框在键盘弹出时的表现 */
+    .chat-input input:focus {
+        /* 当输入框获得焦点时，确保它可见 */
+        scroll-margin-bottom: 20px;
+    }
+}
+
+/* 专门针对iOS的优化 */
+@supports (-webkit-appearance: none) {
+    @media (max-width: 768px) {
+        .chat-input {
+            /* iOS上的额外优化 */
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+        
+        .chat-input input {
+            /* 防止iOS上的输入框被遮挡 */
+            -webkit-user-select: text;
+            user-select: text;
+        }
+    }
+}
+
+/* 额外的按钮遮挡防护 */
+@media (max-width: 768px) {
+    /* 确保发送按钮永远不会被遮挡 */
+    .chat-input {
+        padding-right: max(20px, env(safe-area-inset-right, 0px) + 8px) !important;
+    }
+    
+    #sendButton {
+        margin-right: 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .chat-input {
+        padding-right: max(15px, env(safe-area-inset-right, 0px) + 8px) !important;
+    }
+    
+    #sendButton {
+        margin-right: 2px;
+    }
 }
 
 /* 高亮样式 */
