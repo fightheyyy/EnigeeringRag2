@@ -33,7 +33,7 @@ class DrawingUploadService:
         self.config = Config()
         
         # Gemini API配置 (使用OpenRouter)
-        self.openrouter_api_key = "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"
+        self.openrouter_api_key = "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"
         self.base_url = "https://openrouter.ai/api/v1"
         self.model_name = "google/gemini-2.5-pro-preview"
         
