@@ -1,44 +1,64 @@
 import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 class Config:
-    # DeepSeek API配置
-    OPENAI_API_KEY = "sk-6617ec8529ec49f8a632b7532d2c8760"
-    OPENAI_BASE_URL = "https://api.deepseek.com/v1"
-    MODEL_NAME = "deepseek-chat"
+    # DeepSeek API配置 - 从环境变量读取
+    OPENAI_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+    OPENAI_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+    MODEL_NAME = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     
     # 向量数据库配置
     CHROMA_PERSIST_DIRECTORY = "./data/chroma_db"
     # 注意：实际使用的是BigModel的embedding-2模型，下面的配置为遗留配置
     EMBEDDING_MODEL = "paraphrase-MiniLM-L6-v2"  # 已弃用，保留作为备选
     
-    # BigModel配置
-    bigmodel_api_key = "cc4a411638ce41deacc6977ccc584d67.f9W593o2F3JVcouv"  # BigModel API密钥
-    bigmodel_base_url = "https://open.bigmodel.cn/api/paas/v4"
-    bigmodel_embedding_model = "embedding-2"
+    # BigModel配置 - 从环境变量读取
+    bigmodel_api_key = os.getenv("BIGMODEL_API_KEY", "")
+    bigmodel_base_url = os.getenv("BIGMODEL_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
+    bigmodel_embedding_model = os.getenv("BIGMODEL_MODEL", "embedding-2")
+    
+    # MySQL配置 - 从环境变量读取
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "")
+    MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+    MYSQL_USER = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "")
+    
+    # MinIO配置 - 从环境变量读取
+    MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "")
+    MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
+    MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
+    MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "engineering-drawings")
+    
+    # OpenRouter API配置 - 从环境变量读取
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     
     # 检索配置
     SIMILARITY_THRESHOLD = 0.24  # 进一步降低阈值以包含燃气调压器流速要求(相似度0.2437)
     MAX_RETRIEVAL_RESULTS = 15  # 增加检索结果数量以确保包含目标文档块
     
     # 服务器配置
-    DEBUG = False
-    HOST = "0.0.0.0"
-    PORT = 8000
+    DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+    HOST = os.getenv("HOST", "0.0.0.0")
+    PORT = int(os.getenv("PORT", "8000"))
     
     # 知识库配置
     KNOWLEDGE_BASE_PATH = "./knowledge_base"
     SUPPORTED_FILE_TYPES = [".txt", ".md", ".pdf", ".docx"]
     
     # 数据库配置
-    DATABASE_URL = "sqlite:///./engineering_rag.db"
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./engineering_rag.db")
     
     # 系统配置
-    MAX_UPLOAD_SIZE = 10485760  # 10MB
-    ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:8000", "*"]
+    MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", "10485760"))  # 10MB
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,*").split(",")
     
     # 日志配置
-    LOG_LEVEL = "INFO"
-    LOG_FILE = "./logs/app.log"
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_FILE = os.getenv("LOG_FILE", "./logs/app.log")
     
     # DeepSeek模型特定配置
     MAX_TOKENS = 2000
@@ -134,6 +154,27 @@ class Config:
         return cls.DEEPSEEK_CONFIG
     
     @classmethod
+    def get_mysql_config(cls):
+        """获取MySQL配置"""
+        return {
+            "host": cls.MYSQL_HOST,
+            "port": cls.MYSQL_PORT,
+            "user": cls.MYSQL_USER,
+            "password": cls.MYSQL_PASSWORD,
+            "database": cls.MYSQL_DATABASE
+        }
+    
+    @classmethod
+    def get_minio_config(cls):
+        """获取MinIO配置"""
+        return {
+            "endpoint": cls.MINIO_ENDPOINT,
+            "access_key": cls.MINIO_ACCESS_KEY,
+            "secret_key": cls.MINIO_SECRET_KEY,
+            "bucket_name": cls.MINIO_BUCKET_NAME
+        }
+    
+    @classmethod
     def get_engineering_domain_config(cls, domain: str):
         """获取工程领域配置"""
         return cls.ENGINEERING_DOMAINS.get(domain, {})
@@ -141,18 +182,26 @@ class Config:
     @classmethod
     def validate_config(cls):
         """验证配置有效性"""
+        missing_configs = []
+        
         if not cls.OPENAI_API_KEY:
-            raise ValueError("DeepSeek API密钥未配置")
+            missing_configs.append("DEEPSEEK_API_KEY")
         
-        if not cls.OPENAI_BASE_URL:
-            raise ValueError("DeepSeek API地址未配置")
+        if not cls.bigmodel_api_key:
+            missing_configs.append("BIGMODEL_API_KEY")
         
-        if not cls.MODEL_NAME:
-            raise ValueError("模型名称未配置")
+        if not cls.MYSQL_PASSWORD:
+            missing_configs.append("MYSQL_PASSWORD")
+            
+        if missing_configs:
+            print(f"⚠️  警告：以下配置项未设置: {', '.join(missing_configs)}")
+            print("   请检查.env文件或环境变量设置")
+            return False
         
         print("✅ 配置验证通过")
         print(f"   DeepSeek API: {cls.OPENAI_BASE_URL}")
         print(f"   模型: {cls.MODEL_NAME}")
-        print(f"   向量模型: {cls.EMBEDDING_MODEL}")
+        print(f"   BigModel API: {cls.bigmodel_base_url}")
+        print(f"   MySQL: {cls.MYSQL_HOST}:{cls.MYSQL_PORT}")
         
         return True 

@@ -32,26 +32,21 @@ class DrawingUploadService:
     def __init__(self):
         self.config = Config()
         
-        # Gemini API配置 (使用OpenRouter)
-        self.openrouter_api_key = "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"
+        # Gemini API配置 (使用OpenRouter) - 从Config读取
+        self.openrouter_api_key = self.config.OPENROUTER_API_KEY
         self.base_url = "https://openrouter.ai/api/v1"
         self.model_name = "google/gemini-2.5-pro-preview"
         
-        # MinIO配置
-        self.minio_endpoint = "43.139.19.144:9000"
-        self.minio_access_key = "minioadmin"
-        self.minio_secret_key = "minioadmin"
-        self.minio_bucket_name = "drawings"
+        # MinIO配置 - 从Config读取
+        minio_config = self.config.get_minio_config()
+        self.minio_endpoint = minio_config["endpoint"]
+        self.minio_access_key = minio_config["access_key"]
+        self.minio_secret_key = minio_config["secret_key"]
+        self.minio_bucket_name = minio_config["bucket_name"]
         self.minio_secure = False
         
-        # MySQL配置 (使用现有的配置)
-        self.mysql_config = {
-            "host": "gz-cdb-e0aa423v.sql.tencentcdb.com",
-            "port": 20236,
-            "user": "root",
-            "password": "Aa@114514",
-            "database": "gauz_ai_messages"
-        }
+        # MySQL配置 - 从Config读取
+        self.mysql_config = self.config.get_mysql_config()
         
         # 初始化客户端
         self._init_clients()
