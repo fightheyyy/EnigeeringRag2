@@ -58,9 +58,22 @@ logs/
 temp/
 tmp/
 
-# 数据库文件（可选择性忽略）
-# chroma_db/
-# *.sqlite3
+# 数据库文件
+data/
+chroma_db/
+*.sqlite3
+*.db
+
+# 向量数据库
+data/chroma_db/
+data/chroma_db_cloud/
+data/chroma_db_backup/
+data/sync_log.json
+
+# 图纸存储和处理
+drawings/
+extracted_texts/
+minio_data/
 
 # 缓存目录
 model_cache/

@@ -7,7 +7,7 @@ import uuid
 import logging
 import os
 import re
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from core.config import Config
 from core.models import QuestionRequest, AnswerResponse, KnowledgeDocument, SystemStatus  
@@ -95,6 +95,154 @@ def extract_used_standards_from_answer(answer: str) -> List[str]:
         return [std for std in standards if std]  # 过滤空字符串
     
     return []
+
+def analyze_answer_sources(answer: str, sources: List) -> Dict[str, List]:
+    """
+    分析答案中实际使用的来源类型
+    
+    Args:
+        answer: 大模型生成的答案
+        sources: 检索到的所有来源
+        
+    Returns:
+        Dict包含不同类型的来源信息
+    """
+    used_sources = {
+        'standards': [],  # 标准来源
+        'regulations': [],  # 法规来源  
+        'drawings': [],  # 图纸来源
+        'source_files': []  # 所有来源文件名
+    }
+    
+    # 从答案的参考来源部分提取实际使用的来源
+    import re
+    
+    # 方法1: 查找📚 参考来源部分
+    source_pattern = r'📚 参考来源：\s*(.*?)(?=💭|$)'
+    source_match = re.search(source_pattern, answer, re.DOTALL)
+    
+    if source_match:
+        source_text = source_match.group(1)
+        
+        # 提取来源文件名（格式：1. 文件名 - 块X (相关度: XX.X%)）
+        # 修改正则表达式以更好地匹配文件名
+        file_pattern = r'\d+\.\s*([^-\n]+?)(?:\s*-\s*块|\s*\()'
+        file_matches = re.findall(file_pattern, source_text)
+        
+        for file_name in file_matches:
+            file_name = file_name.strip()
+            used_sources['source_files'].append(file_name)
+            _classify_source_type(file_name, used_sources)
+    
+    # 方法2: 查找答案中的（来源：块X）格式
+    block_pattern = r'（来源：块(\d+)）'
+    block_matches = re.findall(block_pattern, answer)
+    
+    if block_matches and sources:
+        logger.info(f"🔍 在答案中发现块引用: {block_matches}")
+        for block_num in block_matches:
+            try:
+                block_index = int(block_num)
+                # 从sources列表中找到对应的来源
+                if 0 <= block_index < len(sources):
+                    source = sources[block_index]
+                    file_name = source.file_name if hasattr(source, 'file_name') else str(source)
+                    used_sources['source_files'].append(file_name)
+                    _classify_source_type(file_name, used_sources)
+                    logger.info(f"✅ 识别到来源: 块{block_index} -> {file_name}")
+            except (ValueError, IndexError):
+                continue
+    
+    # 方法3: 查找答案中的文本引用（如"以上信息来源于结构设计总说明二"）
+    text_source_patterns = [
+        r'以上信息来源于([^中。，]+)',
+        r'信息来源于([^中。，]+)',
+        r'来源于([^中。，]+)',
+        r'根据([^中。，]*设计说明[^中。，]*)',
+        r'参考([^中。，]*设计说明[^中。，]*)'
+    ]
+    
+    for pattern in text_source_patterns:
+        text_matches = re.findall(pattern, answer)
+        for match in text_matches:
+            source_name = match.strip()
+            if len(source_name) > 2:  # 过滤太短的匹配
+                used_sources['source_files'].append(source_name)
+                _classify_source_type(source_name, used_sources)
+                logger.info(f"✅ 识别到文本来源: {source_name}")
+    
+    # 也从[使用标准: XXX]中提取
+    used_standards = extract_used_standards_from_answer(answer)
+    if used_standards and "无" not in used_standards:
+        for standard in used_standards:
+            if any(indicator in standard for indicator in ['住宅楼', '设计说明', '图纸', '大样']):
+                used_sources['drawings'].append(standard)
+            else:
+                used_sources['standards'].append(standard)
+    
+    return used_sources
+
+def _classify_source_type(file_name: str, used_sources: Dict[str, List]):
+    """根据文件名分类来源类型"""
+    # 图纸识别：包含住宅楼、设计说明等关键词
+    drawing_keywords = ['住宅楼', '设计说明', '图纸', '大样', '详图', '施工图', '结构', '建筑', '给排水', '电气', '暖通', '桩基', '基础', '平面图', '立面图', '剖面图']
+    if any(keyword in file_name for keyword in drawing_keywords):
+        used_sources['drawings'].append(file_name)
+    # 标准识别：GB、JGJ等开头或包含.txt
+    elif (any(file_name.startswith(prefix) for prefix in ['GB', 'JGJ', 'CJJ', 'JTG', 'JTS', 'CJ']) or 
+          file_name.endswith('.txt')):
+        used_sources['standards'].append(file_name)
+    # 法规识别：包含管理办法、条例等
+    elif any(keyword in file_name for keyword in ['管理办法', '条例', '暂行办法', '规定', '通知', '意见']):
+        used_sources['regulations'].append(file_name)
+
+def optimize_reference_display(answer: str) -> str:
+    """优化参考依据显示，隐藏值为"无"的类别，并使用Markdown格式"""
+    import re
+    
+    # 查找参考依据部分
+    reference_pattern = r'📚\s*\*\*参考依据\*\*\s*(.*?)(?=\n\n|$)'
+    reference_match = re.search(reference_pattern, answer, re.DOTALL)
+    
+    if not reference_match:
+        return answer
+    
+    reference_content = reference_match.group(1).strip()
+    
+    # 提取各个类别
+    categories = {
+        '使用标准': r'\[使用标准:\s*([^\]]+)\]',
+        '引用法规': r'\[引用法规:\s*([^\]]+)\]', 
+        '引用图纸': r'\[引用图纸:\s*([^\]]+)\]',
+        '参考文档': r'\[参考文档:\s*([^\]]+)\]'
+    }
+    
+    # 构建新的参考依据部分
+    new_reference_lines = ["## 📚 参考依据"]
+    
+    for category_name, pattern in categories.items():
+        match = re.search(pattern, reference_content)
+        if match:
+            value = match.group(1).strip()
+            if value and value != "无":
+                new_reference_lines.append(f"**{category_name}**: {value}")
+    
+    # 如果没有任何有效的参考依据，保持原样
+    if len(new_reference_lines) == 1:
+        return answer
+    
+    # 替换原来的参考依据部分
+    new_reference_section = "\n".join(new_reference_lines)
+    
+    # 替换答案中的参考依据部分
+    new_answer = re.sub(
+        r'📚\s*\*\*参考依据\*\*.*?(?=\n\n|$)', 
+        new_reference_section, 
+        answer, 
+        flags=re.DOTALL
+    )
+    
+    return new_answer
 
 def smart_filter_standards(answer: str, standards: List) -> List:
     """智能过滤标准：基于答案内容过滤出真正相关的标准"""
@@ -197,81 +345,58 @@ async def ask_question(request: QuestionRequest):
             collection_name="regulations"
         )
         
-        # 增强问题表述
-        enhanced_question = enhance_engineering_question(request.question)
+        # 步骤1: 直接使用用户问题检索知识库（不添加额外内容）
+        user_question = request.question
         
-        # 多重检索策略：使用多个查询词提高检索准确性
-        search_queries = [enhanced_question]
-        
-        # 针对特定问题添加替代查询词
-        original_q = request.question.lower()
-        if "应急厕所" in original_q and "距离" in original_q:
-            search_queries.extend([
-                "应急厕所设置要求",
-                "6.1.6 应急厕所",
-                "应急避难场所厕所设置",
-                "GB 21734 应急厕所",
-                "篷宿区厕所距离"
-            ])
-        elif "厕所" in original_q and ("间距" in original_q or "距离" in original_q):
-            search_queries.extend([
-                "应急厕所设置要求",
-                "厕所布局要求"
-            ])
-        
-        # 执行多重检索并合并结果（同时搜索所有知识库）
+        # 步骤2: 检索所有知识库
         all_results = []
         seen_content = set()  # 避免重复内容
         
         logger.info("🔍 开始检索所有知识库...")
         
-        for query in search_queries:
-            # 搜索国家标准库
-            logger.info(f"📊 搜索standards库: {query}")
-            standards_result = standards_kb_manager.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
-            
-            if standards_result and "results" in standards_result:
-                for result in standards_result["results"]:
-                    content_hash = hash(result['content'][:100])
-                    if content_hash not in seen_content:
-                        seen_content.add(content_hash)
-                        # 标记来源为standards
-                        result['source_type'] = 'standards'
-                        all_results.append(result)
-            
-            # 搜索法规库
-            logger.info(f"🏛️ 搜索regulations库: {query}")
-            regulations_result = regulations_kb_manager.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
-            
-            if regulations_result and "results" in regulations_result:
-                for result in regulations_result["results"]:
-                    content_hash = hash(result['content'][:100])
-                    if content_hash not in seen_content:
-                        seen_content.add(content_hash)
-                        # 标记来源为regulations
-                        result['source_type'] = 'regulations'
-                        all_results.append(result)
-            
-            # 搜索图纸知识库
-            if drawing_service and drawing_service.drawings_kb:
-                try:
-                    logger.info(f"📋 搜索drawings库: {query}")
-                    drawings_result = drawing_service.drawings_kb.search(query, n_results=config.MAX_RETRIEVAL_RESULTS)
-                    
-                    if drawings_result and "results" in drawings_result:
-                        for result in drawings_result["results"]:
-                            content_hash = hash(result['content'][:100])
-                            if content_hash not in seen_content:
-                                seen_content.add(content_hash)
-                                # 标记来源为drawings
-                                result['source_type'] = 'drawings'
-                                all_results.append(result)
-                except Exception as e:
-                    logger.warning(f"图纸知识库搜索失败: {e}")
+        # 搜索国家标准库
+        logger.info(f"📊 搜索standards库: {user_question}")
+        standards_result = standards_kb_manager.search(user_question, n_results=config.MAX_RETRIEVAL_RESULTS)
+        
+        if standards_result and "results" in standards_result:
+            for result in standards_result["results"]:
+                content_hash = hash(result['content'][:100])
+                if content_hash not in seen_content:
+                    seen_content.add(content_hash)
+                    result['source_type'] = 'standards'
+                    all_results.append(result)
+        
+        # 搜索法规库
+        logger.info(f"🏛️ 搜索regulations库: {user_question}")
+        regulations_result = regulations_kb_manager.search(user_question, n_results=config.MAX_RETRIEVAL_RESULTS)
+        
+        if regulations_result and "results" in regulations_result:
+            for result in regulations_result["results"]:
+                content_hash = hash(result['content'][:100])
+                if content_hash not in seen_content:
+                    seen_content.add(content_hash)
+                    result['source_type'] = 'regulations'
+                    all_results.append(result)
+        
+        # 搜索图纸知识库
+        if drawing_service and drawing_service.drawings_kb:
+            try:
+                logger.info(f"📋 搜索drawings库: {user_question}")
+                drawings_result = drawing_service.drawings_kb.search(user_question, n_results=config.MAX_RETRIEVAL_RESULTS)
+                
+                if drawings_result and "results" in drawings_result:
+                    for result in drawings_result["results"]:
+                        content_hash = hash(result['content'][:100])
+                        if content_hash not in seen_content:
+                            seen_content.add(content_hash)
+                            result['source_type'] = 'drawings'
+                            all_results.append(result)
+            except Exception as e:
+                logger.warning(f"图纸知识库搜索失败: {e}")
         
         # 按相似度排序并取前N个结果
         all_results.sort(key=lambda x: x.get('similarity', 0), reverse=True)
-        final_results = all_results[:config.MAX_RETRIEVAL_RESULTS * 2]  # 允许更多结果用于过滤
+        final_results = all_results[:config.MAX_RETRIEVAL_RESULTS * 2]
         
         # 包装为标准格式
         sources_result = {"results": final_results}
@@ -308,335 +433,183 @@ async def ask_question(request: QuestionRequest):
         session_id = request.session_id or "default"
         history = session_history.get(session_id, [])
         
-        # 生成答案
+        # 步骤3: 大模型生成答案
         response = llm_service.generate_answer(
             question=request.question,
             sources=sources,
             context_history=history
         )
         
-        # 根据大模型答案中的引用查询MySQL数据库获取URL
+                # 步骤4: 根据答案中的结构化参考依据检索URL
         related_standards = []
         related_regulations = []
         related_drawings = []
         
         if standards_service:
             try:
-                logger.info("🔍 分析大模型答案中的引用...")
-                
-                # 从答案中提取标准引用
+                logger.info("🔍 根据结构化参考依据检索相关URL...")
                 answer_text = response.answer
-                standard_refs = standards_service.extract_standard_references(answer_text)
                 
-                if standard_refs:
-                    logger.info(f"📊 在答案中发现标准引用: {standard_refs}")
-                    for ref in standard_refs:
-                        standards = standards_service.search_standards_by_name(ref, 2)
-                        related_standards.extend(standards)
+                # 提取结构化参考依据
+                import re
+                reference_section_pattern = r'📚\s*\*\*参考依据\*\*\s*(.*?)(?:\n\n|$)'
+                reference_match = re.search(reference_section_pattern, answer_text, re.DOTALL)
                 
-                # 检查答案中是否包含法规相关内容
-                regulation_keywords = [
-                    '管理办法', '条例', '暂行办法', '住宅专项维修资金',
-                    '售房单位', '售房款', '第八条', '行政处罚',
-                    '法律责任', '行政管理', '监督管理', '资金管理',
-                    '违法行为', '处罚标准', '法定职责'
-                ]
-                
-                # 排除技术标准中的常见词汇
-                technical_excludes = [
-                    '根据.*《.*》.*规定',  # 更精确：根据《标准名称》的规定
-                    '根据.*标准.*规定', '根据.*规范.*规定', 
-                    '技术规定', '质量规定', '施工规定', '设计规定', 
-                    '检验规定', '性能规定', '组分规定', '掺量规定', 
-                    '强度规定', 'GB.*规定', 'JGJ.*规定', 'CJJ.*规定'
-                ]
-                
-                has_regulation_content = False
-                # 检查是否包含明确的法规关键词
-                if any(keyword in answer_text for keyword in regulation_keywords):
-                    # 进一步验证：排除技术标准相关的"规定"
-                    is_technical_regulation = any(
-                        re.search(pattern, answer_text, re.IGNORECASE) 
-                        for pattern in technical_excludes
-                    )
+                if reference_match:
+                    reference_content = reference_match.group(1).strip()
+                    logger.info(f"📚 找到参考依据部分: {reference_content}")
                     
-                    # 只有在不是技术标准相关的"规定"时才认为是法规内容
-                    if not is_technical_regulation:
-                        has_regulation_content = True
-                        logger.info("🏛️ 检测到法规相关内容，但已排除技术标准规定")
-                    else:
-                        logger.info("📋 检测到技术标准规定，不查询法规数据库")
+                    # 4.1 提取并检索标准URL
+                    standard_pattern = r'\[使用标准:\s*([^\]]+)\]'
+                    standard_match = re.search(standard_pattern, reference_content)
+                    if standard_match:
+                        standards_text = standard_match.group(1).strip()
+                        if standards_text and standards_text != "无":
+                            standard_refs = [s.strip() for s in standards_text.split(',') if s.strip()]
+                            logger.info(f"📊 提取到标准引用: {standard_refs}")
+                            for ref in standard_refs:
+                                standards = standards_service.search_standards_by_name(ref, 2)
+                                related_standards.extend(standards)
+                    
+                    # 4.2 提取并检索法规URL
+                    regulation_pattern = r'\[引用法规:\s*([^\]]+)\]'
+                    regulation_match = re.search(regulation_pattern, reference_content)
+                    if regulation_match:
+                        regulations_text = regulation_match.group(1).strip()
+                        if regulations_text and regulations_text != "无":
+                            regulation_refs = [r.strip() for r in regulations_text.split(',') if r.strip()]
+                            logger.info(f"🏛️ 提取到法规引用: {regulation_refs}")
+                            # 基于法规名称检索
+                            regulations = standards_service.find_regulation_by_content_keywords(' '.join(regulation_refs))
+                            related_regulations.extend(regulations)
+                    
+                    # 4.3 提取并检索图纸URL
+                    drawing_pattern = r'\[引用图纸:\s*([^\]]+)\]'
+                    drawing_match = re.search(drawing_pattern, reference_content)
+                    if drawing_match:
+                        drawings_text = drawing_match.group(1).strip()
+                        if drawings_text and drawings_text != "无":
+                            drawing_refs = [d.strip() for d in drawings_text.split(',') if d.strip()]
+                            logger.info(f"📐 提取到图纸引用: {drawing_refs}")
+                            
+                            if drawing_service:
+                                drawings = drawing_service.get_drawings_list(limit=50)
+                                for drawing_ref in drawing_refs:
+                                    for drawing_info in drawings:
+                                        drawing_db_name = drawing_info.get('drawing_name', '')
+                                        original_filename = drawing_info.get('original_filename', '')
+                                        
+                                        # 精确匹配或包含匹配
+                                        if (drawing_ref in drawing_db_name or 
+                                            drawing_db_name in drawing_ref or
+                                            drawing_ref in original_filename):
+                                            related_drawings.append(drawing_info)
+                                            logger.info(f"✅ 匹配到图纸: {drawing_db_name}")
+                                            break
+                    
+                    # 4.4 提取并检索参考文档URL（也作为图纸检索）
+                    document_pattern = r'\[参考文档:\s*([^\]]+)\]'
+                    document_match = re.search(document_pattern, reference_content)
+                    if document_match:
+                        documents_text = document_match.group(1).strip()
+                        if documents_text and documents_text != "无":
+                            document_refs = [d.strip() for d in documents_text.split(',') if d.strip()]
+                            logger.info(f"📄 提取到文档引用: {document_refs}")
+                            
+                            # 检查参考文档中是否包含法规（兼容处理）
+                            regulation_keywords = ['办法', '规定', '条例', '法律', '法规', '暂行规定', '管理规定']
+                            potential_regulations = []
+                            technical_documents = []
+                            
+                            for doc_ref in document_refs:
+                                if any(keyword in doc_ref for keyword in regulation_keywords):
+                                    potential_regulations.append(doc_ref)
+                                    logger.info(f"🏛️ 在参考文档中发现法规: {doc_ref}")
+                                else:
+                                    technical_documents.append(doc_ref)
+                            
+                            # 检索法规URL
+                            if potential_regulations:
+                                regulations = standards_service.find_regulation_by_content_keywords(' '.join(potential_regulations))
+                                related_regulations.extend(regulations)
+                            
+                            # 检索技术文档URL（作为图纸检索）
+                            if technical_documents and drawing_service:
+                                drawings = drawing_service.get_drawings_list(limit=50)
+                                for doc_ref in technical_documents:
+                                    for drawing_info in drawings:
+                                        drawing_db_name = drawing_info.get('drawing_name', '')
+                                        original_filename = drawing_info.get('original_filename', '')
+                                        
+                                        # 精确匹配或包含匹配
+                                        if (doc_ref in drawing_db_name or 
+                                            drawing_db_name in doc_ref or
+                                            doc_ref in original_filename):
+                                            related_drawings.append(drawing_info)
+                                            logger.info(f"✅ 匹配到参考文档: {drawing_db_name}")
+                                            break
                 
-                if has_regulation_content:
-                    logger.info("🏛️ 答案涉及法规内容，查询regulations表...")
-                    question_content = request.question
-                    combined_content = question_content + " " + answer_text[:500]  # 结合问题和答案前500字符
-                    regulations = standards_service.find_regulation_by_content_keywords(combined_content)
-                    related_regulations = regulations
+                else:
+                    # 兼容旧格式
+                    logger.info("📚 未找到新格式参考依据，使用兼容模式...")
+                    standard_refs = standards_service.extract_standard_references(answer_text)
+                    if standard_refs:
+                        logger.info(f"📊 在答案中发现标准引用: {standard_refs}")
+                        for ref in standard_refs:
+                            standards = standards_service.search_standards_by_name(ref, 2)
+                            related_standards.extend(standards)
                 
-                # 去重标准
-                if related_standards:
-                    seen_ids = set()
-                    unique_standards = []
-                    for standard in related_standards:
-                        if standard.id not in seen_ids:
-                            seen_ids.add(standard.id)
-                            unique_standards.append(standard)
-                    related_standards = unique_standards[:3]
+                # 去重
+                related_drawings = list({d.get('drawing_name', ''): d for d in related_drawings}.values())
                 
                 # 记录找到的资源
                 if related_standards:
-                    logger.info(f"✅ 找到 {len(related_standards)} 个相关标准:")
-                    for std in related_standards:
-                        logger.info(f"  - {std.standard_number}: {std.standard_name}")
-                        logger.info(f"    URL: {std.file_url}")
-                
+                    logger.info(f"✅ 找到 {len(related_standards)} 个相关标准")
                 if related_regulations:
-                    logger.info(f"✅ 找到 {len(related_regulations)} 个相关法规:")
-                    for reg in related_regulations:
-                        logger.info(f"  - {reg.legal_name}")
-                        logger.info(f"    URL: {reg.legal_url}")
-                
-                # 检查答案中是否包含图纸相关内容并查询图纸URL
-                drawing_keywords = [
-                    '图纸', '大样', '详图', '平面图', '立面图', '剖面图', 
-                    '节点图', '构造图', '配筋图', '墙柱', '梁板', '基础图',
-                    '施工图', '设计图', '建筑图', '结构图', '设备图',
-                    # 扩展图纸相关关键词
-                    '设计说明', '施工说明', '技术说明', '工程说明', '说明书',
-                    '旋挖钻孔', '灌注桩', '钻孔桩', '住宅楼', '办公楼',
-                    '桩基础', '基坑支护', '围护结构', '泥浆护壁', '护筒'
-                ]
-                
-                # 检查答案内容是否包含图纸关键词
-                has_drawing_content = any(keyword in answer_text for keyword in drawing_keywords)
-                
-                # 从使用标准中识别图纸文档
-                used_standards = extract_used_standards_from_answer(answer_text)
-                has_drawing_from_standards = False
-                drawing_standard_names = []
-                
-                if used_standards and "无" not in used_standards:
-                    for standard in used_standards:
-                        # 检查标准名称是否为图纸文档
-                        drawing_indicators = [
-                            '设计说明', '施工说明', '技术说明', '工程说明',
-                            '住宅楼', '办公楼', '商业楼', '教学楼',
-                            '旋挖', '钻孔', '灌注桩', '桩基础',
-                            '.dwg', '.pdf', '_图', '_设计', '_施工'
-                        ]
-                        
-                        if any(indicator in standard for indicator in drawing_indicators):
-                            has_drawing_from_standards = True
-                            drawing_standard_names.append(standard)
-                            logger.info(f"🎯 从使用标准中识别到图纸文档: {standard}")
-                
-                # 合并检测结果
-                has_drawing_content = has_drawing_content or has_drawing_from_standards
-                
-                if has_drawing_content and drawing_service:
-                    logger.info("📋 检测到图纸相关内容，查询图纸数据库...")
-                    try:
-                        # 从答案中提取可能的图纸名称
-                        drawing_names = []
-                        
-                        # 优先使用从使用标准中识别到的图纸名称
-                        if drawing_standard_names:
-                            drawing_names.extend(drawing_standard_names)
-                            logger.info(f"🎯 优先使用标准中的图纸名称: {drawing_standard_names}")
-                        
-                        # 查找括号中的图纸名称
-                        import re
-                        bracket_matches = re.findall(r'[（(]([^）)]*图[^）)]*)[）)]', answer_text)
-                        drawing_names.extend(bracket_matches)
-                        
-                        # 查找直接提到的图纸名称
-                        for keyword in drawing_keywords:
-                            if keyword in answer_text:
-                                # 提取包含关键词的短语
-                                pattern = rf'[\w\d_\-\.]*{keyword}[\w\d_\-\.]*'
-                                matches = re.findall(pattern, answer_text)
-                                drawing_names.extend(matches)
-                        
-                        # 去重并查询数据库
-                        unique_drawing_names = list(set(drawing_names))
-                        logger.info(f"🔍 提取到的图纸名称: {unique_drawing_names}")
-                        
-                        for drawing_name in unique_drawing_names:
-                            if len(drawing_name) > 3:  # 过滤太短的匹配
-                                drawings = drawing_service.get_drawings_list(limit=50)
-                                for drawing_info in drawings:
-                                    drawing_db_name = drawing_info.get('drawing_name', '')
-                                    original_filename = drawing_info.get('original_filename', '')
-                                    
-                                    # 改进匹配逻辑：支持部分匹配和模糊匹配
-                                    if (drawing_name in drawing_db_name or 
-                                        drawing_name in original_filename or
-                                        drawing_db_name in drawing_name or
-                                        original_filename in drawing_name):
-                                        related_drawings.append(drawing_info)
-                                        logger.info(f"✅ 匹配到图纸: {drawing_db_name} <- {drawing_name}")
-                                        break
-                                    
-                                    # 进一步的模糊匹配：处理关键词匹配
-                                    name_keywords = drawing_name.replace('_', ' ').split()
-                                    if len(name_keywords) >= 2:
-                                        matched_keywords = 0
-                                        for keyword in name_keywords:
-                                            if (keyword in drawing_db_name or 
-                                                keyword in original_filename) and len(keyword) > 2:
-                                                matched_keywords += 1
-                                        
-                                        # 如果匹配到一半以上的关键词，认为是相关图纸
-                                        if matched_keywords >= len(name_keywords) // 2:
-                                            related_drawings.append(drawing_info)
-                                            logger.info(f"✅ 关键词匹配到图纸: {drawing_db_name} <- {drawing_name} (匹配{matched_keywords}/{len(name_keywords)}个关键词)")
-                                            break
-                        
-                        # 如果没有找到具体的图纸，尝试通过问题内容和识别到的图纸名称搜索
-                        if not related_drawings:
-                            question_content = request.question
-                            combined_content = question_content + " " + answer_text[:300]
-                            
-                            # 如果有从标准中识别到的图纸名称，优先使用它们进行搜索
-                            if drawing_standard_names:
-                                for standard_name in drawing_standard_names:
-                                    combined_content += " " + standard_name
-                                logger.info(f"🔍 使用识别到的图纸标准名称进行向量搜索: {drawing_standard_names}")
-                            
-                            # 使用图纸搜索功能
-                            search_results = drawing_service.search_drawings_in_vector_db(
-                                query=combined_content, 
-                                top_k=5  # 增加搜索结果数量
-                            )
-                            
-                            if search_results:
-                                for result in search_results:
-                                    drawing_id = result.get('metadata', {}).get('drawing_id')
-                                    if drawing_id:
-                                        drawings = drawing_service.get_drawings_list(limit=50)
-                                        for drawing_info in drawings:
-                                            if drawing_info.get('id') == drawing_id:
-                                                related_drawings.append(drawing_info)
-                                                break
-                        
-                        # 去重
-                        if related_drawings:
-                            seen_ids = set()
-                            unique_drawings = []
-                            for drawing in related_drawings:
-                                if drawing.get('id') not in seen_ids:
-                                    seen_ids.add(drawing.get('id'))
-                                    unique_drawings.append(drawing)
-                            related_drawings = unique_drawings[:3]  # 最多显示3个图纸
-                        
-                        if related_drawings:
-                            logger.info(f"✅ 找到 {len(related_drawings)} 个相关图纸:")
-                            for drawing in related_drawings:
-                                logger.info(f"  - {drawing.get('drawing_name', '未知图纸')}")
-                                logger.info(f"    URL: {drawing.get('minio_url', '无URL')}")
-                    
-                    except Exception as e:
-                        logger.error(f"查询图纸数据库失败: {e}")
+                    logger.info(f"✅ 找到 {len(related_regulations)} 个相关法规")
+                if related_drawings:
+                    logger.info(f"✅ 找到 {len(related_drawings)} 个相关图纸")
                     
             except Exception as e:
-                logger.error(f"查询MySQL数据库失败: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"查询数据库失败: {e}")
         
-        # 检查答案是否真正回答了问题（内容相关性检查）
-        # 只有在确实没有检索到任何相关内容时才回退
-        critical_irrelevant_patterns = [
-            "根据提供的规范文档内容，未检索到",
-            "提供的文档中没有找到",
-            "文档中未包含相关信息",
-            "[使用标准: 无]"
-        ]
+        # 步骤5: 将URL添加到答案中
+        url_info = ""
         
-        # 检查是否是完全无关的回答（更严格的条件）
-        is_completely_irrelevant = any(pattern in response.answer for pattern in critical_irrelevant_patterns)
-        
-        # 如果找到了相关的标准、法规或图纸，即使答案中有"未找到"等词汇，也不应该回退
-        has_relevant_resources = (len(related_standards) > 0 or len(related_regulations) > 0 or len(related_drawings) > 0)
-        
-        if is_completely_irrelevant and not has_relevant_resources:
-            logger.warning("检索到的文档内容与问题不够相关，回退到模型知识回答")
-            response = llm_service.generate_answer_without_context(request.question)
-            
-            # 为回退答案添加会话历史
-            history.append({"role": "user", "content": request.question})
-            history.append({"role": "assistant", "content": response.answer})
-            session_history[session_id] = history[-10:]
-            response.session_id = session_id
-            
-            return response
-        
-        # 提取答案中实际使用的标准并过滤相关标准列表
-        filtered_standards = []
+        # 添加标准URL
         if related_standards:
-            # 从答案中提取DeepSeek标注的使用标准
-            used_standards = extract_used_standards_from_answer(response.answer)
-            
-            if used_standards and "无" not in used_standards:
-                # 根据答案中标注的标准过滤相关标准列表
-                for standard in related_standards:
-                    standard_num = standard.standard_number.replace(" ", "").replace("-", "")
-                    for used_std in used_standards:
-                        used_std_clean = used_std.replace(" ", "").replace("-", "")
-                        if used_std_clean in standard_num or standard_num in used_std_clean:
-                            filtered_standards.append(standard)
-                            break
-            else:
-                # 如果没有标注使用标准，使用智能过滤
-                filtered_standards = smart_filter_standards(response.answer, related_standards)
-            
-            # 添加过滤后的标准信息
-            if filtered_standards:
-                standard_info = "\n\n📋 **相关国家标准：**\n"
-                for standard in filtered_standards:
-                    standard_info += f"• **{standard.standard_number}**: {standard.standard_name}\n"
-                    standard_info += f"  状态: {standard.status}\n"
-                    if standard.file_url:
-                        standard_info += f"  📄 [查看标准文档]({standard.file_url})\n"
-                    standard_info += "\n"
-                
-                response.answer += standard_info
+            url_info += "\n\n## 📋 相关国家标准\n"
+            for standard in related_standards[:3]:  # 最多3个
+                url_info += f"• **{standard.standard_number}**: {standard.standard_name}\n"
+                if standard.file_url:
+                    url_info += f"  📄 [查看标准文档]({standard.file_url})\n"
+                url_info += "\n"
         
-        # 添加相关法规信息
+        # 添加法规URL
         if related_regulations:
-            regulation_info = "\n\n📋 **相关法律法规：**\n"
-            for regulation in related_regulations:
-                regulation_info += f"• **{regulation.legal_name}**\n"
+            url_info += "\n## 🏛️ 相关法规\n"
+            for regulation in related_regulations[:2]:  # 最多2个
+                url_info += f"• **{regulation.legal_name}**\n"
                 if regulation.legal_url:
-                    regulation_info += f"  📄 [查看法规文档]({regulation.legal_url})\n"
-                regulation_info += "\n"
-            
-            response.answer += regulation_info
+                    url_info += f"  📄 [查看法规文档]({regulation.legal_url})\n"
+                url_info += "\n"
         
-        # 添加相关图纸信息
+        # 添加图纸URL
         if related_drawings:
-            drawing_info = "\n\n📋 **相关工程图纸：**\n"
-            for drawing in related_drawings:
-                drawing_name = drawing.get('drawing_name') or drawing.get('original_filename', '未知图纸')
-                drawing_info += f"• **{drawing_name}**\n"
-                
-                # 添加项目信息
-                if drawing.get('project_name'):
-                    drawing_info += f"  项目: {drawing.get('project_name')}\n"
-                
-                # 添加图纸类型
-                if drawing.get('drawing_type'):
-                    drawing_info += f"  类型: {drawing.get('drawing_type')}\n"
-                
-                # 添加图纸URL
+            url_info += "\n## 📐 相关图纸\n"
+            for drawing in related_drawings[:3]:  # 最多3个
+                drawing_name = drawing.get('drawing_name', '未知图纸')
+                url_info += f"• **{drawing_name}**\n"
                 if drawing.get('minio_url'):
-                    drawing_info += f"  📄 [查看图纸文档]({drawing.get('minio_url')})\n"
-                elif drawing.get('file_url'):
-                    drawing_info += f"  📄 [查看图纸文档]({drawing.get('file_url')})\n"
-                
-                drawing_info += "\n"
-            
-            response.answer += drawing_info
+                    url_info += f"  📄 [查看图纸]({drawing.get('minio_url')})\n"
+                url_info += "\n"
+        
+        # 优化参考依据显示（隐藏"无"的类别）
+        response.answer = optimize_reference_display(response.answer)
+        
+        # 将URL信息添加到答案中
+        if url_info:
+            response.answer += url_info
         
         # 更新会话历史
         history.append({"role": "user", "content": request.question})

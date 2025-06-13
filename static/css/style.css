@@ -912,4 +912,192 @@ body {
         text-align: center;
         gap: 8px;
     }
+}
+
+/* Markdown渲染样式 */
+.message h1, .message h2, .message h3, .message h4, .message h5, .message h6 {
+    margin: 16px 0 12px 0;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-color);
+}
+
+.message h1 {
+    font-size: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 8px;
+}
+
+.message h2 {
+    font-size: 1.3rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+}
+
+.message h3 {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+}
+
+.message h4 {
+    font-size: 1.1rem;
+}
+
+.message h5, .message h6 {
+    font-size: 1rem;
+}
+
+/* Markdown列表样式 */
+.message ul, .message ol {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.message ul li, .message ol li {
+    margin: 6px 0;
+    line-height: 1.5;
+}
+
+.message ul {
+    list-style-type: disc;
+}
+
+.message ol {
+    list-style-type: decimal;
+}
+
+.message ul ul, .message ol ol, .message ul ol, .message ol ul {
+    margin: 4px 0;
+}
+
+/* Markdown表格样式 */
+.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-table th,
+.markdown-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.markdown-table th {
+    background: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+.markdown-table tr:hover {
+    background: #f8f9fa;
+}
+
+.markdown-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Markdown代码样式 */
+.message code {
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #e83e8c;
+    border: 1px solid #e9ecef;
+}
+
+.markdown-code {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 12px 0;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.markdown-code code {
+    background: none;
+    padding: 0;
+    border: none;
+    color: #333;
+}
+
+/* Markdown引用样式 */
+.message blockquote {
+    margin: 16px 0;
+    padding: 12px 20px;
+    border-left: 4px solid var(--primary-color);
+    background: #f8f9fa;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: #666;
+}
+
+.message blockquote p {
+    margin: 0;
+}
+
+/* Markdown分割线样式 */
+.message hr {
+    margin: 24px 0;
+    border: none;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--border-color), transparent);
+}
+
+/* Markdown链接样式增强 */
+.message a {
+    color: var(--primary-color);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.message a:hover {
+    border-bottom-color: var(--primary-color);
+    background: rgba(0, 123, 255, 0.1);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+/* Markdown强调样式 */
+.message em {
+    font-style: italic;
+    color: #666;
+}
+
+.message strong {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* 响应式表格 */
+@media (max-width: 768px) {
+    .markdown-table {
+        font-size: 0.8rem;
+    }
+    
+    .markdown-table th,
+    .markdown-table td {
+        padding: 8px 12px;
+    }
+    
+    .markdown-code {
+        padding: 12px;
+        font-size: 0.8rem;
+    }
 } 

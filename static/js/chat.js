@@ -141,6 +141,42 @@ class ChatManager {
     }
 
     formatMessageContent(content) {
+        // 简单直接的方法：如果包含 ## 标题，就使用 Markdown 渲染
+        if (content.includes('##') && typeof marked !== 'undefined') {
+            // 配置marked选项
+            marked.setOptions({
+                breaks: true,        // 支持换行符转换为<br>
+                gfm: true,          // 支持GitHub风格的Markdown
+                sanitize: false,    // 允许HTML（我们信任后端内容）
+                smartLists: true,   // 智能列表
+                smartypants: false  // 不转换引号
+            });
+            
+            // 使用marked解析Markdown
+            try {
+                let html = marked.parse(content);
+                
+                // 为表格添加样式类
+                html = html.replace(/<table>/g, '<table class="markdown-table">');
+                
+                // 为代码块添加样式类
+                html = html.replace(/<pre><code>/g, '<pre class="markdown-code"><code>');
+                
+                // 确保链接在新窗口打开
+                html = html.replace(/<a href="([^"]*)">/g, '<a href="$1" target="_blank" rel="noopener noreferrer">');
+                
+                return html;
+            } catch (error) {
+                console.warn('Markdown解析失败，使用基础格式化:', error);
+                return this.formatBasicContent(content);
+            }
+        } else {
+            return this.formatBasicContent(content);
+        }
+    }
+
+    formatBasicContent(content) {
+        // 基础格式化（原有逻辑）
         // 处理换行符
         content = content.replace(/\n/g, '<br>');
         
