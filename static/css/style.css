@@ -439,46 +439,7 @@ body {
     font-size: 14px;
 }
 
-/* 示例问题区域 */
-.examples {
-    margin-top: 30px;
-    background: rgba(255,255,255,0.95);
-    border-radius: var(--border-radius);
-    padding: 30px;
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(10px);
-}
 
-.examples h3 {
-    color: var(--text-color);
-    margin-bottom: 20px;
-    text-align: center;
-    font-weight: 600;
-}
-
-.example-questions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-}
-
-.example-question {
-    padding: 16px;
-    background: white;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: var(--transition);
-    border: 1px solid var(--border-color);
-    font-weight: 500;
-    text-align: center;
-}
-
-.example-question:hover {
-    background: var(--light-bg);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border-color: var(--primary-color);
-}
 
 /* 返回顶部按钮 */
 .back-to-top {
@@ -632,14 +593,7 @@ body {
         font-size: 18px;
     }
     
-    .example-questions {
-        grid-template-columns: 1fr;
-    }
-    
-    .examples {
-        padding: 20px;
-        margin-bottom: 80px; /* 为固定输入框留出空间 */
-    }
+
     
     /* 图纸上传面板移动端适配 */
     .drawing-upload-panel {
@@ -656,7 +610,6 @@ body {
 /* 打印样式 */
 @media print {
     .chat-input,
-    .examples,
     .back-to-top {
         display: none;
     }
@@ -933,15 +886,7 @@ body {
         flex-shrink: 0;
     }
     
-    .examples {
-        padding: 15px;
-        margin-bottom: 70px;
-    }
-    
-    .example-question {
-        padding: 12px;
-        font-size: 0.9rem;
-    }
+
 }
 
 /* 横屏模式适配 */
@@ -955,9 +900,7 @@ body {
         padding-bottom: 90px;
     }
     
-    .examples {
-        margin-bottom: 60px;
-    }
+
 }
 
 /* 移动端视图特殊样式 */
@@ -974,10 +917,7 @@ body {
     z-index: 1000;
 }
 
-.mobile-view .examples {
-    padding: 20px 15px;
-    margin-bottom: 70px;
-}
+
 
 /* 键盘弹出时的优化 */
 @media (max-width: 768px) {

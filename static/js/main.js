@@ -29,8 +29,7 @@ class App {
             // 加载用户偏好设置
             this.loadUserPreferences();
             
-            // 初始化示例问题
-            this.initializeExamples();
+            // 示例问题功能已移除
             
             this.initialized = true;
             console.log('✅ 系统初始化完成');
@@ -124,36 +123,7 @@ class App {
         }
     }
 
-    initializeExamples() {
-        const examples = [
-            '混凝土结构保护层最小厚度是多少？',
-            '脚手架连墙件最大间距要求？',
-            '钢筋锚固长度如何计算？',
-            '外墙保温材料有什么要求？',
-            '应急厕所设置距离要求？',
-            '建筑防火间距的规定？'
-        ];
 
-        const exampleContainer = Utils.dom.get('#exampleQuestions');
-        if (exampleContainer) {
-            exampleContainer.innerHTML = '';
-            
-            examples.forEach(question => {
-                const exampleDiv = Utils.dom.create('div', {
-                    className: 'example-question',
-                    innerHTML: Utils.text.escapeHtml(question)
-                });
-                
-                Utils.events.on(exampleDiv, 'click', () => {
-                    if (this.components.chat) {
-                        this.components.chat.askExample(question);
-                    }
-                });
-                
-                exampleContainer.appendChild(exampleDiv);
-            });
-        }
-    }
 
     handleGlobalError(error) {
         // 记录错误到控制台
