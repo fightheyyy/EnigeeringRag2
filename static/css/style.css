@@ -61,25 +61,7 @@ body {
     position: relative;
 }
 
-/* 头部样式 */
-.header {
-    text-align: center;
-    margin-bottom: 15px;
-    color: white;
-}
 
-.header h1 {
-    font-size: clamp(2rem, 4vw, 2.5rem);
-    font-weight: 700;
-    margin-bottom: 10px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-}
-
-.header p {
-    font-size: clamp(1rem, 2vw, 1.2rem);
-    opacity: 0.9;
-    font-weight: 300;
-}
 
 /* 聊天容器 */
 .chat-container {
@@ -87,9 +69,9 @@ body {
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
     overflow: hidden;
-    height: 85vh;
-    min-height: 800px;
-    max-height: 1000px;
+    height: 95vh;
+    min-height: 850px;
+    max-height: 1100px;
     display: flex;
     flex-direction: column;
     backdrop-filter: blur(10px);
@@ -488,9 +470,9 @@ body {
     }
     
     .chat-container {
-        height: 90vh;
-        min-height: 750px;
-        max-height: 95vh;
+        height: 98vh;
+        min-height: 800px;
+        max-height: 98vh;
     }
     
     .chat-messages {
@@ -842,8 +824,8 @@ body {
     }
     
     .chat-container {
-        height: 92vh;
-        min-height: 700px;
+        height: 98vh;
+        min-height: 750px;
     }
     
     .chat-messages {
@@ -895,8 +877,8 @@ body {
 /* 横屏模式适配 */
 @media (max-width: 768px) and (orientation: landscape) {
     .chat-container {
-        height: 85vh;
-        min-height: 450px;
+        height: 95vh;
+        min-height: 500px;
     }
     
     .chat-messages {
