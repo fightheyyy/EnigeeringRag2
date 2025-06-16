@@ -54,16 +54,17 @@ body {
 }
 
 .container {
-    max-width: 1400px;
+    max-width: min(95vw, 1600px);
+    width: 100%;
     margin: 0 auto;
-    padding: 20px;
+    padding: 10px;
     position: relative;
 }
 
 /* 头部样式 */
 .header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 15px;
     color: white;
 }
 
@@ -481,8 +482,9 @@ body {
     }
     
     .container {
-        padding: 10px;
+        padding: 5px;
         max-width: 100%;
+        width: 100%;
     }
     
     .chat-container {
@@ -835,7 +837,8 @@ body {
 /* 更小屏幕的额外适配 */
 @media (max-width: 480px) {
     .container {
-        padding: 5px;
+        padding: 2px;
+        width: 100%;
     }
     
     .chat-container {
