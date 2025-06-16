@@ -199,6 +199,84 @@ body {
     margin: 6px 0;
     color: var(--primary-color);
     font-weight: 500;
+    transition: var(--transition);
+}
+
+/* 参考来源折叠/展开样式 */
+.sources-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.source-count {
+    color: #666;
+    font-size: 0.8rem;
+    font-weight: normal;
+    margin-left: 8px;
+}
+
+.source-hidden {
+    display: none;
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.source-shown {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+    animation: slideInSource 0.3s ease-out;
+}
+
+@keyframes slideInSource {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 参考来源展开/折叠按钮样式 */
+.source-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(33, 150, 243, 0.1);
+    color: var(--primary-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-top: 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    user-select: none;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+.source-toggle-btn:hover {
+    background: rgba(33, 150, 243, 0.15);
+    border-color: rgba(33, 150, 243, 0.3);
+    transform: translateY(-1px);
+}
+
+.source-toggle-btn:active {
+    transform: translateY(0);
+}
+
+.source-toggle-btn .toggle-icon {
+    font-size: 10px;
+    transition: transform 0.3s ease;
+}
+
+.source-toggle-btn.expanded .toggle-icon {
+    transform: rotate(180deg);
 }
 
 .standards-section {

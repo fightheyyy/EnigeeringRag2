@@ -193,15 +193,33 @@ class ChatManager {
     }
 
     renderSources(sources) {
-        let html = '<div class="sources"><strong>📚 参考来源：</strong>';
+        const showCount = 3; // 默认显示前3条
+        const sourceId = Utils.generateId('source'); // 生成唯一ID
+        
+        let html = `<div class="sources" id="${sourceId}">
+            <div class="sources-header">
+                <strong>📚 参考来源：</strong>
+                ${sources.length > showCount ? `<span class="source-count">(共${sources.length}条)</span>` : ''}
+            </div>`;
+        
         sources.forEach((source, index) => {
-            html += `<div class="source-item">
+            const isHidden = index >= showCount;
+            html += `<div class="source-item ${isHidden ? 'source-hidden' : ''}" data-index="${index}">
                 ${index + 1}. ${Utils.text.escapeHtml(source.file_name)}
                 ${source.regulation_code ? ' (' + Utils.text.escapeHtml(source.regulation_code) + ')' : ''}
                 ${source.section ? ' - ' + Utils.text.escapeHtml(source.section) : ''}
                 (相关度: ${(source.similarity_score * 100).toFixed(1)}%)
             </div>`;
         });
+        
+        // 如果有超过3条来源，添加展开/折叠按钮
+        if (sources.length > showCount) {
+            html += `<div class="source-toggle-btn" onclick="toggleSources('${sourceId}')">
+                <span class="toggle-text">展开更多 (${sources.length - showCount})</span>
+                <span class="toggle-icon">▼</span>
+            </div>`;
+        }
+        
         html += '</div>';
         return html;
     }
@@ -365,5 +383,40 @@ function askExample(question) {
 function clearInput() {
     if (chatManager) {
         chatManager.clearInput();
+    }
+}
+
+// 参考来源展开/折叠功能
+function toggleSources(sourceId) {
+    const sourceContainer = document.getElementById(sourceId);
+    if (!sourceContainer) return;
+    
+    const hiddenItems = sourceContainer.querySelectorAll('.source-item.source-hidden');
+    const shownItems = sourceContainer.querySelectorAll('.source-item.source-shown');
+    const toggleBtn = sourceContainer.querySelector('.source-toggle-btn');
+    const toggleText = toggleBtn.querySelector('.toggle-text');
+    const toggleIcon = toggleBtn.querySelector('.toggle-icon');
+    
+    const isExpanded = shownItems.length > 0;
+    
+    if (!isExpanded) {
+        // 展开
+        hiddenItems.forEach(item => {
+            item.classList.remove('source-hidden');
+            item.classList.add('source-shown');
+        });
+        toggleText.textContent = '收起';
+        toggleIcon.textContent = '▲';
+        toggleBtn.classList.add('expanded');
+    } else {
+        // 折叠
+        shownItems.forEach(item => {
+            item.classList.remove('source-shown');
+            item.classList.add('source-hidden');
+        });
+        const hiddenCount = sourceContainer.querySelectorAll('.source-item').length - 3;
+        toggleText.textContent = `展开更多 (${hiddenCount})`;
+        toggleIcon.textContent = '▼';
+        toggleBtn.classList.remove('expanded');
     }
 } 
