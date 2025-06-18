@@ -272,6 +272,10 @@ class LLMService:
         try:
             logger.info(f"基于模型知识生成答案 - 问题: {question}")
             
+            # 检查是否为问候或闲聊
+            if is_greeting_or_casual(question):
+                return self._generate_greeting_response(question)
+            
             # 识别工程领域
             engineering_domain = identify_engineering_domain(question)
             domain_config = self.config.get_engineering_domain_config(engineering_domain)
@@ -372,6 +376,38 @@ class LLMService:
             suggestions.extend(domain_suggestions[engineering_domain])
         
         return suggestions[:5]  # 最多返回5个建议
+
+    def _generate_greeting_response(self, question: str) -> AnswerResponse:
+        """生成问候回复"""
+        greeting_responses = [
+            "您好！我是工程监理智能助手，专门为您提供工程监理相关的技术咨询服务。",
+            "您可以向我咨询以下类型的问题：",
+            "• 混凝土结构施工质量要求",
+            "• 脚手架安全检查要点", 
+            "• 钢结构施工规范",
+            "• 地基基础工程验收标准",
+            "• 建筑防水工程技术要求",
+            "• 其他工程监理相关技术问题",
+            "",
+            "请告诉我您需要咨询的具体工程问题，我将基于相关规范标准为您提供专业解答。"
+        ]
+        
+        answer = "\n".join(greeting_responses)
+        
+        return AnswerResponse(
+            question=question,
+            answer=answer,
+            sources=[],
+            confidence_score=1.0,
+            timestamp=datetime.now(),
+            has_definitive_answer=True,
+            suggestions=[
+                "混凝土强度等级要求",
+                "脚手架搭设规范",
+                "外墙保温施工要点",
+                "地基基础验收标准"
+            ]
+        )
 
     def _create_error_response(self, question: str, error: str) -> AnswerResponse:
         """创建错误响应"""
@@ -520,6 +556,28 @@ class LLMService:
             return self.generate_answer_without_context(question)
 
 # 工程监理专用功能函数
+def is_greeting_or_casual(question: str) -> bool:
+    """识别是否为问候或闲聊"""
+    question_lower = question.lower().strip()
+    
+    # 常见问候语
+    greetings = [
+        "你好", "您好", "hello", "hi", "嗨", "早上好", "下午好", "晚上好",
+        "怎么样", "如何", "在吗", "在不在", "能帮我吗", "可以帮我吗",
+        "谢谢", "感谢", "再见", "拜拜", "好的", "ok", "明白了"
+    ]
+    
+    # 如果问题很短且是常见问候语
+    if len(question_lower) <= 10 and any(greeting in question_lower for greeting in greetings):
+        return True
+    
+    # 如果问题只包含问候语和标点符号
+    cleaned_question = ''.join(c for c in question_lower if c.isalnum())
+    if cleaned_question in greetings:
+        return True
+    
+    return False
+
 def identify_engineering_domain(question: str) -> str:
     """识别工程领域"""
     question_lower = question.lower()

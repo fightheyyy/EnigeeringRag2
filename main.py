@@ -227,9 +227,16 @@ def optimize_reference_display(answer: str) -> str:
             if value and value != "无":
                 new_reference_lines.append(f"**{category_name}**: {value}")
     
-    # 如果没有任何有效的参考依据，保持原样
+    # 如果没有任何有效的参考依据，完全移除参考依据部分
     if len(new_reference_lines) == 1:
-        return answer
+        # 移除整个参考依据部分
+        new_answer = re.sub(
+            r'📚\s*\*\*参考依据\*\*.*?(?=\n\n|$)', 
+            '', 
+            answer, 
+            flags=re.DOTALL
+        )
+        return new_answer.strip()
     
     # 替换原来的参考依据部分
     new_reference_section = "\n".join(new_reference_lines)
@@ -334,6 +341,11 @@ async def ask_question(request: QuestionRequest):
     """处理用户问题"""
     try:
         logger.info(f"收到问题: {request.question}")
+        
+        # 检查是否为问候或闲聊
+        from services.llm_service import is_greeting_or_casual
+        if is_greeting_or_casual(request.question):
+            return llm_service.generate_answer_without_context(request.question)
         
         # 初始化所有知识库管理器
         standards_kb_manager = KnowledgeBaseManager(
@@ -470,6 +482,7 @@ async def ask_question(request: QuestionRequest):
                             for ref in standard_refs:
                                 standards = standards_service.search_standards_by_name(ref, 2)
                                 related_standards.extend(standards)
+                                logger.info(f"🔍 检索标准 '{ref}': 找到 {len(standards)} 个匹配")
                     
                     # 4.2 提取并检索法规URL
                     regulation_pattern = r'\[引用法规:\s*([^\]]+)\]'
@@ -479,9 +492,11 @@ async def ask_question(request: QuestionRequest):
                         if regulations_text and regulations_text != "无":
                             regulation_refs = [r.strip() for r in regulations_text.split(',') if r.strip()]
                             logger.info(f"🏛️ 提取到法规引用: {regulation_refs}")
-                            # 基于法规名称检索
-                            regulations = standards_service.find_regulation_by_content_keywords(' '.join(regulation_refs))
-                            related_regulations.extend(regulations)
+                            # 基于法规名称检索 - 分别检索每个法规
+                            for reg_ref in regulation_refs:
+                                regulations = standards_service.find_regulation_by_content_keywords(reg_ref)
+                                related_regulations.extend(regulations)
+                                logger.info(f"🔍 检索法规 '{reg_ref}': 找到 {len(regulations)} 个匹配")
                     
                     # 4.3 提取并检索图纸URL
                     drawing_pattern = r'\[引用图纸:\s*([^\]]+)\]'
@@ -536,18 +551,62 @@ async def ask_question(request: QuestionRequest):
                             # 检索技术文档URL（作为图纸检索）
                             if technical_documents and drawing_service:
                                 drawings = drawing_service.get_drawings_list(limit=50)
+                                logger.info(f"📋 图纸数据库中共有 {len(drawings)} 个图纸文档")
                                 for doc_ref in technical_documents:
+                                    logger.info(f"🔍 搜索参考文档: '{doc_ref}'")
+                                    found_match = False
                                     for drawing_info in drawings:
                                         drawing_db_name = drawing_info.get('drawing_name', '')
                                         original_filename = drawing_info.get('original_filename', '')
                                         
-                                        # 精确匹配或包含匹配
-                                        if (doc_ref in drawing_db_name or 
-                                            drawing_db_name in doc_ref or
-                                            doc_ref in original_filename):
+                                        # 改进匹配逻辑：更智能的匹配
+                                        # 1. 完全匹配
+                                        # 2. 包含匹配（双向）
+                                        # 3. 关键词匹配（至少匹配3个关键词）
+                                        # 4. 核心词匹配（去除版本号等信息）
+                                        
+                                        # 提取关键词（过滤掉常见的版本信息）
+                                        def extract_core_keywords(text):
+                                            # 移除版本信息、单位信息等
+                                            clean_text = re.sub(r'第\d+版\d+KB|第\d+版|\d+KB|_第\d+版.*', '', text)
+                                            # 保留中文和数字，用空格分隔
+                                            clean_text = re.sub(r'[_\-\.]+', ' ', clean_text)
+                                            # 按中文词汇和数字分割
+                                            keywords = []
+                                            for part in clean_text.split():
+                                                if len(part.strip()) > 1:
+                                                    keywords.append(part.strip())
+                                            return keywords
+                                        
+                                        ref_keywords = extract_core_keywords(doc_ref)
+                                        drawing_keywords = extract_core_keywords(drawing_db_name)
+                                        filename_keywords = extract_core_keywords(original_filename)
+                                        
+                                        # 计算关键词匹配度
+                                        def calculate_match_score(ref_kw, target_kw):
+                                            if not ref_kw or not target_kw:
+                                                return 0
+                                            matches = sum(1 for kw in ref_kw if any(kw in tkw or tkw in kw for tkw in target_kw))
+                                            return matches / len(ref_kw)
+                                        
+                                        drawing_score = calculate_match_score(ref_keywords, drawing_keywords)
+                                        filename_score = calculate_match_score(ref_keywords, filename_keywords)
+                                        max_score = max(drawing_score, filename_score)
+                                        
+                                        # 匹配条件
+                                        exact_match = (doc_ref == drawing_db_name or doc_ref == original_filename)
+                                        contains_match = (doc_ref in drawing_db_name or drawing_db_name in doc_ref or
+                                                        doc_ref in original_filename or original_filename in doc_ref)
+                                        keyword_match = max_score >= 0.6  # 至少60%的关键词匹配
+                                        
+                                        if exact_match or contains_match or keyword_match:
                                             related_drawings.append(drawing_info)
-                                            logger.info(f"✅ 匹配到参考文档: {drawing_db_name}")
+                                            logger.info(f"✅ 匹配到参考文档: '{doc_ref}' -> '{drawing_db_name}'")
+                                            found_match = True
                                             break
+                                    
+                                    if not found_match:
+                                        logger.warning(f"❌ 未找到匹配的参考文档: '{doc_ref}'")
                 
                 else:
                     # 兼容旧格式
@@ -561,6 +620,8 @@ async def ask_question(request: QuestionRequest):
                 
                 # 去重
                 related_drawings = list({d.get('drawing_name', ''): d for d in related_drawings}.values())
+                related_standards = list({s.id: s for s in related_standards}.values())  # 按ID去重标准
+                related_regulations = list({r.id: r for r in related_regulations}.values())  # 按ID去重法规
                 
                 # 记录找到的资源
                 if related_standards:

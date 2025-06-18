@@ -404,43 +404,52 @@ class MySQLStandardsService:
         Returns:
             相关法规信息列表
         """
-        # 提取特定的法规关键词（更精确）
+        logger.info(f"🔍 查找法规，内容: '{content}'")
+        
+        # 直接搜索完整的法规名称
+        all_regulations = []
+        
+        # 如果内容就是法规名称，直接搜索
+        regulations = self.search_regulations_by_name(content, 3)
+        if regulations:
+            logger.info(f"✅ 直接匹配到法规: {[r.legal_name for r in regulations]}")
+            all_regulations.extend(regulations)
+        
+        # 提取法规关键词进行搜索
         keywords = []
         
-        # 住宅维修资金相关
-        if '住宅专项维修资金' in content:
-            keywords.append('住宅专项维修资金')
-        if ('多层住宅' in content or '高层住宅' in content) and ('维修资金' in content or '专项资金' in content):
-            keywords.append('住宅专项维修资金')
-        if '售房款' in content and ('维修资金' in content or '专项资金' in content):
-            keywords.append('住宅专项维修资金')
+        # 常见法规关键词
+        regulation_keywords = [
+            '住宅专项维修资金', '建筑工程施工', '建筑工程质量', '房地产经纪', 
+            '商品房销售', '安全生产管理', '城市房屋便器', '城市公厕', 
+            '便器水箱', '公厕管理', '房屋便器', '水箱应用'
+        ]
         
-        # 建筑管理法规相关（更严格的条件）
-        if '建筑工程' in content and any(legal_term in content for legal_term in ['管理办法', '条例', '许可证', '资质']):
-            keywords.extend(['建筑工程施工', '建筑工程质量'])
+        # 检查内容中是否包含这些关键词
+        for keyword in regulation_keywords:
+            if keyword in content:
+                keywords.append(keyword)
         
-        # 房地产法规相关
-        if any(term in content for term in ['房地产', '商品房', '房屋买卖']):
-            if any(legal_term in content for legal_term in ['管理办法', '条例', '合同', '销售']):
-                keywords.extend(['房地产经纪', '商品房销售'])
-        
-        # 安全生产法规相关
-        if '安全生产' in content and any(legal_term in content for legal_term in ['管理办法', '条例', '责任']):
-            keywords.append('安全生产管理')
-        
-        # 如果没有找到明确的法规关键词，返回空列表
-        if not keywords:
-            logger.info("🔍 未检测到明确的法规关键词，跳过法规查询")
-            return []
+        # 如果内容包含"办法"、"规定"等法规标识词，提取相关词汇
+        if any(term in content for term in ['办法', '规定', '条例', '法律', '法规']):
+            # 提取可能的法规名称片段
+            import re
+            # 提取包含法规标识词的短语
+            pattern = r'[\u4e00-\u9fff]+(?:办法|规定|条例|法律|法规)'
+            matches = re.findall(pattern, content)
+            for match in matches:
+                if len(match) > 4:  # 过滤太短的匹配
+                    keywords.append(match)
         
         # 去重
         keywords = list(set(keywords))
-        logger.info(f"🔍 检测到法规关键词: {keywords}")
+        logger.info(f"🔍 提取到法规关键词: {keywords}")
         
         # 搜索法规
-        all_regulations = []
-        for keyword in keywords[:2]:  # 进一步限制关键词数量
-            regulations = self.search_regulations_by_name(keyword, 1)  # 每个关键词只返回1个最相关的结果
+        for keyword in keywords[:5]:  # 最多搜索5个关键词
+            regulations = self.search_regulations_by_name(keyword, 2)
+            if regulations:
+                logger.info(f"✅ 关键词 '{keyword}' 匹配到法规: {[r.legal_name for r in regulations]}")
             all_regulations.extend(regulations)
         
         # 去重
@@ -451,7 +460,8 @@ class MySQLStandardsService:
                 seen_ids.add(regulation.id)
                 unique_regulations.append(regulation)
         
-        return unique_regulations[:2]  # 最多返回2个相关法规
+        logger.info(f"🎯 最终找到 {len(unique_regulations)} 个法规")
+        return unique_regulations[:3]  # 最多返回3个相关法规
 
 # 创建全局实例
 mysql_standards_service = None
